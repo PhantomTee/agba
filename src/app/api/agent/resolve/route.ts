@@ -124,7 +124,7 @@ async function notifyManualResolution(marketId: number, question: string) {
   const { Resend } = await import("resend");
   const resend = new Resend(apiKey);
   await resend.emails.send({
-    from: "Agba Agent <agent@agba.market>",
+    from: "onboarding@resend.dev",
     to: adminEmail,
     subject: `Manual resolution required for Agba market #${marketId}`,
     text: `Question: ${question}`,
