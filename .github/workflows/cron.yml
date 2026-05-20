@@ -1,0 +1,30 @@
+name: Agba Cron Jobs
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"   # scan: every 15 minutes
+    - cron: "0 7 * * *"      # resolve: daily 07:00 UTC
+  workflow_dispatch:          # allow manual trigger from GitHub UI
+
+jobs:
+  scan:
+    name: Agent scan
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '*/15'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger scan
+        run: |
+          curl -f -X POST "${{ secrets.APP_URL }}/api/agent/scan" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
+
+  resolve:
+    name: Agent resolve
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '0 7'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger resolve
+        run: |
+          curl -f -X POST "${{ secrets.APP_URL }}/api/agent/resolve" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
