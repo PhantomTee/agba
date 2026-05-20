@@ -1,5 +1,5 @@
 import { HomeClient } from "@/components/HomeClient";
 
-export default function Home({ searchParams }: { searchParams: { category?: string } }) {
-  return <HomeClient category={searchParams.category} />;
+export default function Home() {
+  return <HomeClient />;
 }
