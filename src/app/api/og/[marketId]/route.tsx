@@ -28,7 +28,7 @@ export async function GET(_: NextRequest, { params }: { params: { marketId: stri
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", color: "#f5a623", fontSize: 32, fontWeight: 800 }}>
-          <span>AGBA</span>
+          <span>Àgbà</span>
           <span>{market.category}</span>
         </div>
         <div style={{ fontSize: 64, lineHeight: 1.05, fontWeight: 900 }}>{market.question}</div>

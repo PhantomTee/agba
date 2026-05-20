@@ -32,7 +32,7 @@ export function Header() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           {/* Logo */}
           <Link href="/" onClick={() => setOpen(false)} className="font-display text-3xl font-black tracking-wide text-[#f5a623]">
-            AGBA
+            Àgbà
           </Link>
 
           {/* Desktop nav */}
@@ -80,7 +80,7 @@ export function Header() {
           {/* Top row */}
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
             <Link href="/" onClick={() => setOpen(false)} className="font-display text-3xl font-black tracking-wide text-[#f5a623]">
-              AGBA
+              Àgbà
             </Link>
             <button
               onClick={() => setOpen(false)}

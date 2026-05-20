@@ -18,7 +18,7 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-[#080808] text-white">
         <Providers>
-          <Suspense fallback={<div className="border-b border-white/10 bg-[#080808] px-4 py-4 text-[#f5a623]">AGBA</div>}>
+          <Suspense fallback={<div className="border-b border-white/10 bg-[#080808] px-4 py-4 text-[#f5a623]">Àgbà</div>}>
             <Header />
           </Suspense>
           {children}
