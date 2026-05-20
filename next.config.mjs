@@ -1,6 +1,5 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  distDir: ".next-build",
   webpack: (config) => {
     config.resolve.alias = {
       ...config.resolve.alias,
