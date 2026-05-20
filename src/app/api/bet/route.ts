@@ -23,7 +23,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Transaction receipt not found or failed on Arc RPC" }, { status: 400 });
     }
     if (receipt.to?.toLowerCase() !== getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS").toLowerCase()) {
-      return NextResponse.json({ error: "Transaction was not sent to the Agba market contract" }, { status: 400 });
+      return NextResponse.json({ error: "Transaction was not sent to the Àgbà market contract" }, { status: 400 });
     }
     const contract = getReadOnlyMarketContract();
     const onchain = await contract.getMarket(marketId);

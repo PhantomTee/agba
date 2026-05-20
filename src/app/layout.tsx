@@ -5,7 +5,7 @@ import { Header } from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Agba | Africa's prediction market",
+  title: "Àgbà | Africa's prediction market",
   description: "AI-powered prediction markets for Nigerian and pan-African news events.",
 };
 

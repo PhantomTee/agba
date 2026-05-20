@@ -79,7 +79,7 @@ export function MarketDetailClient({ id }: { id: string }) {
       <aside className="space-y-8">
         <BetPanel market={market} />
         <div className="border border-white/10 p-5">
-          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#f5a623]">Why Agba made this market</h2>
+          <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#f5a623]">Why Àgbà made this market</h2>
           <p className="mt-3 text-sm leading-relaxed text-white/65">{market.news_items?.groq_reasoning || "No agent reasoning recorded."}</p>
         </div>
         <a href={`/api/og/${market.id}`} target="_blank" rel="noreferrer" className="block border border-white/10 px-4 py-3 text-center text-sm font-bold text-white/70 hover:text-white">

@@ -126,7 +126,7 @@ async function notifyManualResolution(marketId: number, question: string) {
   await resend.emails.send({
     from: "onboarding@resend.dev",
     to: adminEmail,
-    subject: `Manual resolution required for Agba market #${marketId}`,
+    subject: `Manual resolution required for Àgbà market #${marketId}`,
     text: `Question: ${question}`,
   });
 }

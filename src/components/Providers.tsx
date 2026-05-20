@@ -22,7 +22,7 @@ export function Providers({ children }: { children: ReactNode }) {
     } as const;
     return createConfig(
       getDefaultConfig({
-        appName: "Agba",
+        appName: "Àgbà",
         chains: [chain],
         transports: { [chain.id]: http(config.arcRpc) },
         walletConnectProjectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID,

@@ -2,10 +2,10 @@ export default function AboutPage() {
   return (
     <main className="mx-auto max-w-4xl px-4 py-12">
       <p className="text-sm font-black uppercase tracking-[0.28em] text-[#f5a623]">Africa&apos;s prediction market</p>
-      <h1 className="mt-4 font-display text-6xl font-black leading-none text-white">Agba turns African news into accountable markets.</h1>
+      <h1 className="mt-4 font-display text-6xl font-black leading-none text-white">Àgbà turns African news into accountable markets.</h1>
       <div className="mt-10 space-y-6 text-lg leading-8 text-white/70">
         <p>
-          Agba reads Nigerian and pan-African RSS sources, asks Groq to identify verifiable near-term outcomes, and posts suitable questions as
+          Àgbà reads Nigerian and pan-African RSS sources, asks Groq to identify verifiable near-term outcomes, and posts suitable questions as
           USDC prediction markets on Arc testnet.
         </p>
         <p>

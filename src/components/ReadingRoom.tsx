@@ -43,7 +43,7 @@ export function ReadingRoom() {
     <aside className="lg:sticky lg:top-32 lg:h-[calc(100vh-9rem)]">
       <div className="border-l border-[#f5a623] pl-4">
         <h2 className="font-display text-3xl font-black text-white">AI Reading Room</h2>
-        <p className="mt-1 text-sm text-white/50">Agba is reading Africa right now</p>
+        <p className="mt-1 text-sm text-white/50">Àgbà is reading Africa right now</p>
       </div>
       <div className="mt-6 space-y-5 overflow-y-auto pr-2 lg:max-h-[calc(100vh-15rem)]">
         {loading && <p className="text-sm text-white/50">Loading latest scanned articles...</p>}
