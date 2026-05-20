@@ -3,15 +3,18 @@
 import { ConnectKitButton } from "connectkit";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
+import { useAccount } from "wagmi";
 import { CATEGORIES } from "@/lib/constants";
 import { publicConfig } from "@/lib/env";
 
 export function Header() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { address } = useAccount();
   const active = searchParams.get("category") || "ALL";
   const config = publicConfig();
   const walletConfigured = Boolean(config.arcRpc && config.arcChainId && process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
+  const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_WALLET?.toLowerCase();
   function setCategory(category: string) {
     const params = new URLSearchParams(searchParams.toString());
     if (category === "ALL") params.delete("category");
@@ -45,9 +48,11 @@ export function Header() {
           <Link href="/bridge" className="text-sm font-semibold text-white/70 hover:text-white">
             Bridge
           </Link>
-          <Link href="/admin" className="text-sm font-semibold text-white/30 hover:text-white/70">
-            Admin
-          </Link>
+          {isAdmin && (
+            <Link href="/admin" className="text-sm font-semibold text-white/30 hover:text-white/70">
+              Admin
+            </Link>
+          )}
           {walletConfigured ? (
             <ConnectKitButton />
           ) : (
