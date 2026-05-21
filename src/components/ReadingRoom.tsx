@@ -11,6 +11,8 @@ export function ReadingRoom() {
 
   useEffect(() => {
     let active = true;
+
+    // Load initial news via API
     fetch("/api/news/feed")
       .then(async (response) => {
         const data = await response.json();
@@ -19,24 +21,30 @@ export function ReadingRoom() {
       })
       .catch((err) => active && setError(err instanceof Error ? err.message : "Unable to load AI reading room"))
       .finally(() => active && setLoading(false));
+
+    // Supabase Realtime — silently skipped if env vars aren't available yet
+    let cleanup: (() => void) | undefined;
     try {
       const supabase = getSupabaseBrowser();
       const channel = supabase
         .channel("ai-reading-room")
         .on("postgres_changes", { event: "*", schema: "public", table: "news_items" }, (payload) => {
-          setItems((current) => [payload.new as NewsItem, ...current.filter((item) => item.id !== (payload.new as NewsItem).id)].slice(0, 50));
+          if (active) {
+            setItems((current) =>
+              [payload.new as NewsItem, ...current.filter((item) => item.id !== (payload.new as NewsItem).id)].slice(0, 50),
+            );
+          }
         })
         .subscribe();
-      return () => {
-        active = false;
-        supabase.removeChannel(channel);
-      };
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Supabase realtime is not configured");
-      return () => {
-        active = false;
-      };
+      cleanup = () => supabase.removeChannel(channel);
+    } catch {
+      // Realtime unavailable — news still loads from API above
     }
+
+    return () => {
+      active = false;
+      cleanup?.();
+    };
   }, []);
 
   return (
