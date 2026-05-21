@@ -21,6 +21,14 @@ export async function POST(request: NextRequest) {
   }
   const supabase = getSupabaseAdmin();
 
+  // Delete news items older than 6 hours that never became a market,
+  // so stale articles can be re-fetched and re-evaluated next run.
+  await supabase
+    .from("news_items")
+    .delete()
+    .eq("market_created", false)
+    .lt("scanned_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
+
   const parser = new Parser();
   // Cap market creation at 3 per run so we stay well within the 60-second limit.
   const MAX_MARKETS_PER_RUN = 3;
