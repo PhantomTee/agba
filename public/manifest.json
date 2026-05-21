@@ -1,0 +1,20 @@
+{
+  "name": "Àgbà — Africa's Prediction Market",
+  "short_name": "Àgbà",
+  "description": "AI-powered prediction markets for Nigerian and pan-African news events. Bet USDC on politics, forex, sports, and economy.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080808",
+  "theme_color": "#f5a623",
+  "orientation": "portrait-primary",
+  "lang": "en",
+  "categories": ["finance", "news", "games"],
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

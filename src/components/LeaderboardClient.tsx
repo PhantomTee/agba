@@ -44,7 +44,9 @@ function Table({ title, rows, metric }: { title: string; rows: Row[]; metric: (r
         <div className="mt-4 space-y-3">
           {rows.map((row) => (
             <div key={row.wallet} className="flex items-center justify-between gap-4 border-b border-white/10 pb-3 text-sm">
-              <span className="truncate text-white/70">{row.wallet}</span>
+              <span className="font-mono text-white/70">
+                {row.wallet.slice(0, 6)}…{row.wallet.slice(-4)}
+              </span>
               <span className="font-bold text-white">{metric(row)}</span>
             </div>
           ))}

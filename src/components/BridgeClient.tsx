@@ -66,12 +66,26 @@ export function BridgeClient() {
         </button>
       </div>
       {error && <p className="mt-5 border border-red-500/40 p-4 text-sm text-red-200">{error}</p>}
-      {estimate ? (
-        <pre className="mt-5 overflow-auto border border-white/10 bg-white/[0.03] p-4 text-xs text-white/70">
-          {JSON.stringify(estimate, null, 2)}
-        </pre>
+      {estimate && typeof estimate === "object" && estimate !== null ? (
+        <div className="mt-5 border border-white/10 p-5">
+          <h2 className="mb-4 text-xs font-black uppercase tracking-[0.2em] text-[#f5a623]">Estimate</h2>
+          <div className="space-y-3">
+            {Object.entries(estimate as Record<string, unknown>).map(([key, value]) => (
+              <div key={key} className="flex items-start justify-between gap-4 border-b border-white/10 pb-3">
+                <span className="text-xs uppercase tracking-[0.15em] text-white/45">
+                  {key.replace(/([A-Z])/g, " $1").trim()}
+                </span>
+                <span className="text-right text-sm font-bold text-white">
+                  {typeof value === "object" ? JSON.stringify(value) : String(value)}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
       ) : null}
-      {!estimate && !error && !loading ? <p className="mt-5 text-sm text-white/50">No bridge estimate requested yet.</p> : null}
+      {!estimate && !error && !loading ? (
+        <p className="mt-5 text-sm text-white/50">Enter an amount and click Estimate bridge to see fees and timing.</p>
+      ) : null}
     </main>
   );
 }

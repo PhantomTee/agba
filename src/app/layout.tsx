@@ -5,8 +5,27 @@ import { Header } from "@/components/Header";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Àgbà | Africa's prediction market",
-  description: "AI-powered prediction markets for Nigerian and pan-African news events.",
+  metadataBase: new URL("https://agba.vercel.app"),
+  title: {
+    default: "Àgbà | Africa's prediction market",
+    template: "%s — Àgbà",
+  },
+  description: "AI-powered prediction markets for Nigerian and pan-African news events. Bet USDC on politics, forex, sports, and economy.",
+  icons: {
+    icon: "/favicon.svg",
+    shortcut: "/favicon.svg",
+  },
+  manifest: "/manifest.json",
+  openGraph: {
+    siteName: "Àgbà",
+    type: "website",
+    locale: "en_NG",
+    url: "https://agba.vercel.app",
+  },
+  twitter: {
+    card: "summary_large_image",
+    site: "@agba_market",
+  },
 };
 
 export default function RootLayout({

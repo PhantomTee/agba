@@ -8,11 +8,11 @@ import { publicConfig } from "@/lib/env";
 import { calculateOdds, formatUsdc } from "@/lib/odds";
 import type { Market } from "@/lib/types";
 
-export function BetPanel({ market }: { market: Market }) {
+export function BetPanel({ market, initialSide = true }: { market: Market; initialSide?: boolean }) {
   const { address, isConnected } = useAccount();
   const { data: walletClient } = useWalletClient();
   const [amount, setAmount] = useState("");
-  const [side, setSide] = useState<boolean>(true);
+  const [side, setSide] = useState<boolean>(initialSide);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);

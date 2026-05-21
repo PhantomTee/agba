@@ -1,12 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { BetPanel } from "./BetPanel";
 import { MarketCard } from "./MarketCard";
 import { formatUsdc } from "@/lib/odds";
 import type { Bet, Market } from "@/lib/types";
 
 export function MarketDetailClient({ id }: { id: string }) {
+  const searchParams = useSearchParams();
+  const initialSide = searchParams.get("side") !== "no"; // default YES unless ?side=no
   const [market, setMarket] = useState<Market | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [related, setRelated] = useState<Market[]>([]);
@@ -77,7 +80,7 @@ export function MarketDetailClient({ id }: { id: string }) {
         </div>
       </section>
       <aside className="space-y-8">
-        <BetPanel market={market} />
+        <BetPanel market={market} initialSide={initialSide} />
         <div className="border border-white/10 p-5">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#f5a623]">Why Àgbà made this market</h2>
           <p className="mt-3 text-sm leading-relaxed text-white/65">{market.news_items?.groq_reasoning || "No agent reasoning recorded."}</p>
