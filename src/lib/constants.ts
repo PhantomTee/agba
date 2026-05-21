@@ -9,9 +9,11 @@ export const NEWS_SOURCES = [
   { name: "Premium Times", url: "https://www.premiumtimesng.com/feed/", country: "NG", language: "en" },
   { name: "Guardian Nigeria", url: "https://guardian.ng/feed/", country: "NG", language: "en" },
   { name: "Daily Trust", url: "https://dailytrust.com/feed/", country: "NG", language: "en" },
-  // Financial & forex-focused (generates NGN/currency market questions)
-  { name: "Nairametrics", url: "https://nairametrics.com/feed/", country: "NG", language: "en" },
+  // Dedicated forex & financial feeds — generates NGN/currency threshold markets
+  { name: "Nairametrics Forex", url: "https://nairametrics.com/category/business/forex/feed/", country: "NG", language: "en" },
+  { name: "Nairametrics Economy", url: "https://nairametrics.com/category/business/economic-indicators/feed/", country: "NG", language: "en" },
   { name: "BusinessDay Nigeria", url: "https://businessday.ng/feed/", country: "NG", language: "en" },
+  { name: "BusinessDay Markets", url: "https://businessday.ng/category/markets/feed/", country: "NG", language: "en" },
   { name: "The Exchange Africa", url: "https://theexchange.africa/feed/", country: "AFRICA", language: "en" },
   { name: "Stears Business", url: "https://www.stears.co/rss.xml", country: "NG", language: "en" },
   { name: "ThisDay Nigeria", url: "https://www.thisdaylive.com/index.php/feed/", country: "NG", language: "en" },
