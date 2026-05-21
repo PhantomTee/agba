@@ -1,4 +1,4 @@
-export type Category = "FOREX" | "POLITICS" | "SPORTS" | "ECONOMY" | "SECURITY" | "OTHER";
+export type Category = "FOREX" | "POLITICS" | "SPORTS" | "ECONOMY" | "SECURITY" | "COMMODITIES" | "TECH" | "OTHER";
 
 export type NewsItem = {
   id: string;

@@ -21,9 +21,15 @@ export const NEWS_SOURCES = [
   { name: "African Business", url: "https://african.business/feed", country: "AFRICA", language: "en" },
   { name: "The Africa Report", url: "https://www.theafricareport.com/feed/", country: "AFRICA", language: "en" },
   { name: "Nation Africa", url: "https://nation.africa/rss/news.xml", country: "KE", language: "en" },
+  // Tech & Fintech — TECH category
+  { name: "TechCabal", url: "https://techcabal.com/feed/", country: "AFRICA", language: "en" },
+  { name: "Techpoint Africa", url: "https://techpoint.africa/feed/", country: "NG", language: "en" },
+  { name: "Disrupt Africa", url: "https://disrupt-africa.com/feed/", country: "AFRICA", language: "en" },
+  // Commodities & Energy — COMMODITIES category
+  { name: "Nairametrics Energy", url: "https://nairametrics.com/category/energy/feed/", country: "NG", language: "en" },
 ] as const;
 
-export const CATEGORIES: Category[] = ["FOREX", "POLITICS", "SPORTS", "ECONOMY", "SECURITY"];
+export const CATEGORIES: Category[] = ["FOREX", "POLITICS", "SPORTS", "ECONOMY", "SECURITY", "COMMODITIES", "TECH"];
 
 export const CATEGORY_COLORS: Record<Category, string> = {
   FOREX: "#f5a623",
@@ -31,6 +37,8 @@ export const CATEGORY_COLORS: Record<Category, string> = {
   SPORTS: "#2d6a4f",
   ECONOMY: "#4cc9f0",
   SECURITY: "#ef476f",
+  COMMODITIES: "#c77dff",
+  TECH: "#00b4d8",
   OTHER: "#8d99ae",
 };
 

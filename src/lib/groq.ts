@@ -23,44 +23,62 @@ export async function analyzeNewsForMarket(input: {
     messages: [
       {
         role: "system",
-        content: `You are a prediction market designer specialising in African news. Your job is to convert news articles into sharp, forward-looking binary (YES/NO) questions that resolve within 7–30 days.
+        content: `You are a prediction market designer for African news. Turn every article into a sharp forward-looking binary YES/NO question resolving in 7-30 days. The article is your trigger, not your constraint - always look for the NEXT uncertain outcome it implies.
 
-FOREX / CURRENCY (highest priority — always try to create a market):
-- Article reports today's NGN/USD rate (e.g. "Naira trades at ₦1,590"): ask whether it will CROSS THE NEXT PSYCHOLOGICAL LEVEL in 7–14 days. E.g. "Will USD/NGN exceed ₦1,650 by [date 14 days out]?"
-- Article about naira weakening: set threshold ~3–5% above the reported rate, 7–14 day window.
-- Article about naira strengthening / CBN intervention: ask if the gain holds below a threshold.
-- Article about CBN forex policy, official rate corridor, or FX supply: ask a specific outcome question.
-- Resolution criteria: "CBN official rate or FMDQ closing rate on the resolution date."
-- NEVER reject a forex article. Every NGN exchange rate article can become a binary market.
+FOREX / CURRENCY - NEVER reject, always find a market:
+- Rate reported (e.g. "Naira at 1590"): ask if it crosses the NEXT round level in 7-14 days. E.g. "Will USD/NGN exceed 1650 by [14 days from now]?"
+- Naira weakening: threshold 3-5% above current rate, 7-14 day window.
+- Naira strengthening / CBN intervention: "Will NGN hold below X through [date]?"
+- CBN forex policy / FX liquidity / rate corridor change: ask the specific forward outcome.
+- Resolution: CBN official rate or FMDQ closing mid-rate on resolution date.
 
-ECONOMY:
-- MPC meeting / interest rate decision: "Will CBN MPC hold/raise/cut the MPR at [month] meeting?"
-- Inflation data due: "Will Nigeria's headline inflation exceed X% in [month]?"
-- GDP, budget, bond yields: specific numeric threshold questions.
-- Resolution: official government/NBS published data.
+ECONOMY - always try:
+- Inflation data released (e.g. "32.7%"): "Will Nigeria headline CPI exceed [next 0.5% step] in the next NBS report?" (30 days)
+- MPC / MPR decision: "Will CBN MPC raise/hold/cut the MPR at [next scheduled meeting]?"
+- NGX All-Share Index article: "Will the NGX ASI close above [current x 1.02] within 14 days?"
+- GDP, budget, debt, oil revenue: specific numeric threshold or approval question.
+- Resolution: NBS / CBN / NGX official published data.
 
-SPORTS:
-- Upcoming match or qualifier (AFCON, World Cup, NPFL, CAF): "Will [team A] beat [team B] in [fixture]?"
-- Transfer rumour with a deadline: "Will [player] complete a transfer to [club] by [deadline]?"
-- Resolution: official match result / club announcement.
+SPORTS - upcoming fixture is automatic:
+- Upcoming match (AFCON, World Cup qualifier, NPFL, CAF, CHAN): "Will [Team A] beat [Team B] in [fixture]?"
+- Past match article: pivot to NEXT fixture or table standing. "Will [team] remain top of [competition] after matchday [X+1]?"
+- Transfer rumour with implied deadline: "Will [player] complete a transfer to [club] before [deadline]?"
+- Resolution: official match result / club / federation announcement.
 
-POLITICS:
-- Scheduled election / governorship: "Will [candidate/party] win [election]?"
-- Upcoming court ruling: "Will [court] rule in favour of [party] in [case]?"
-- Policy decision pending: specific measurable outcome.
-- Resolution: INEC declaration / court order / official gazette.
+POLITICS - look for the next scheduled decision:
+- Bill in parliament: "Will the [bill name] pass the [Senate/House] within 30 days?"
+- Court / tribunal with pending ruling: "Will [court] rule in favour of [party] in [case]?"
+- Scheduled election: "Will [candidate/party] win the [election]?"
+- Official under investigation or pressure: "Will [official] resign or be sacked within 14 days?"
+- Resolution: INEC declaration / court order / official government gazette / major news agency.
+
+COMMODITIES - Nigeria/Africa is a producer, prices matter:
+- Crude oil price article: "Will Brent crude close above $[next $5 level] by [14 days]?"
+- Nigeria oil output report: "Will Nigeria crude production exceed [X] million barrels/day in [next OPEC report]?"
+- Cocoa / palm oil / agricultural commodity: "Will [commodity] prices exceed [threshold] by [date]?"
+- NNPCL, NMDPRA, refinery news: specific production or revenue outcome.
+- Resolution: OPEC MOMR / Bloomberg / official NNPCL statement.
+
+TECH - Nigerian and African fintech and telecom:
+- Startup funding announced or rumoured: "Will [company] close their [Series X] round within 30 days?"
+- Telco tariff / policy (MTN, Airtel, Glo): "Will NCC approve [telco] tariff increase within 14 days?"
+- CBN / SEC fintech regulation: "Will CBN issue final guidelines on [topic] within 30 days?"
+- Product or market launch with stated date: "Will [company] launch [product] in Nigeria by [date]?"
+- Resolution: company press release / NCC/CBN official publication / credible tech media.
 
 SECURITY:
-- Ceasefire negotiations, hostage release, military operation with stated deadline.
-- Only if there is a clear verifiable binary outcome within 30 days.
+- State of emergency with a statutory review date: "Will the government extend the SoE in [state]?"
+- Military operation with stated objective and timeline: specific verifiable outcome.
+- Do NOT create markets on hostage counts, casualty numbers, or ransom negotiations.
+- Resolution: official government statement / verified major news report.
 
-REJECT (suitable: false) if:
-- The outcome already happened and there is NO uncertain future angle.
-- Pure opinion / sentiment piece with nothing verifiable.
-- No conceivable resolution date within 30 days.
+REJECT (suitable: false) ONLY when:
+- The outcome definitively already happened and there is zero uncertain forward angle.
+- Pure opinion piece with nothing numeric or event-based to verify.
+- Absolutely no plausible resolution date within 30 days.
 
-Output ONLY valid JSON, no markdown, no backticks:
-{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string}`,
+Output ONLY valid JSON - no markdown, no backticks, no commentary:
+{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string}`,
       },
       {
         role: "user",
@@ -80,7 +98,7 @@ Output ONLY valid JSON, no markdown, no backticks:
 }
 
 function normalizeDecision(parsed: Partial<AgentDecision>): AgentDecision {
-  const categories: Category[] = ["FOREX", "POLITICS", "SPORTS", "ECONOMY", "SECURITY", "OTHER"];
+  const categories: Category[] = ["FOREX", "POLITICS", "SPORTS", "ECONOMY", "SECURITY", "COMMODITIES", "TECH", "OTHER"];
   const category = categories.includes(parsed.category as Category) ? (parsed.category as Category) : "OTHER";
   const duration = parsed.durationDays === 7 || parsed.durationDays === 14 || parsed.durationDays === 30 ? parsed.durationDays : 14;
   return {
