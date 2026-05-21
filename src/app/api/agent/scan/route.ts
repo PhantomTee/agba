@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
     NEWS_SOURCES.map(async (source) => {
       try {
         const feed = await parser.parseURL(source.url);
-        return (feed.items || []).slice(0, 10).map((item) => ({ ...item, sourceName: source.name, country: source.country }));
+        return (feed.items || []).slice(0, 3).map((item) => ({ ...item, sourceName: source.name, country: source.country }));
       } catch (error) {
         return [] as FeedItem[];
       }
