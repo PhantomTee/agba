@@ -19,6 +19,14 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "Unauthorized cron request" }, { status: 401 });
   }
   const supabase = getSupabaseAdmin();
+
+  // Clean up news items that were never used to create a market and are older than 6 hours
+  await supabase
+    .from("news_items")
+    .delete()
+    .eq("market_created", false)
+    .lt("scanned_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
+
   const parser = new Parser();
   let articlesScanned = 0;
   let marketsCreated = 0;

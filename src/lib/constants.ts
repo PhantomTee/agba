@@ -1,14 +1,24 @@
 import type { Category } from "./types";
 
 export const NEWS_SOURCES = [
+  // General Nigerian news
   { name: "Punch Nigeria", url: "https://punchng.com/feed/", country: "NG", language: "en" },
   { name: "Vanguard Nigeria", url: "https://www.vanguardngr.com/feed/", country: "NG", language: "en" },
   { name: "The Nation Nigeria", url: "https://thenationonlineng.net/feed/", country: "NG", language: "en" },
   { name: "Channels TV", url: "https://www.channelstv.com/feed/", country: "NG", language: "en" },
   { name: "Premium Times", url: "https://www.premiumtimesng.com/feed/", country: "NG", language: "en" },
+  { name: "Guardian Nigeria", url: "https://guardian.ng/feed/", country: "NG", language: "en" },
+  { name: "Daily Trust", url: "https://dailytrust.com/feed/", country: "NG", language: "en" },
+  // Financial & forex-focused (generates NGN/currency market questions)
+  { name: "Nairametrics", url: "https://nairametrics.com/feed/", country: "NG", language: "en" },
+  { name: "BusinessDay Nigeria", url: "https://businessday.ng/feed/", country: "NG", language: "en" },
+  { name: "The Exchange Africa", url: "https://theexchange.africa/feed/", country: "AFRICA", language: "en" },
+  { name: "Stears Business", url: "https://www.stears.co/rss.xml", country: "NG", language: "en" },
+  { name: "ThisDay Nigeria", url: "https://www.thisdaylive.com/index.php/feed/", country: "NG", language: "en" },
+  // Pan-African
   { name: "African Business", url: "https://african.business/feed", country: "AFRICA", language: "en" },
-  { name: "Quartz Africa", url: "https://qz.com/africa/feed/", country: "AFRICA", language: "en" },
   { name: "The Africa Report", url: "https://www.theafricareport.com/feed/", country: "AFRICA", language: "en" },
+  { name: "Nation Africa", url: "https://nation.africa/rss/news.xml", country: "KE", language: "en" },
 ] as const;
 
 export const CATEGORIES: Category[] = ["FOREX", "POLITICS", "SPORTS", "ECONOMY", "SECURITY"];

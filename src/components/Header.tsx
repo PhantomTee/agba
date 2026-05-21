@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { useAccount } from "wagmi";
 import { publicConfig } from "@/lib/env";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
   { href: "/markets", label: "Markets" },
@@ -28,7 +29,7 @@ export function Header() {
 
   return (
     <>
-      <header className="sticky top-0 z-40 border-b border-white/10 bg-[#080808]/95 backdrop-blur">
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4">
           {/* Logo */}
           <Link href="/" onClick={() => setOpen(false)} className="font-display text-3xl font-black tracking-wide text-[#f5a623]">
@@ -50,8 +51,9 @@ export function Header() {
             ))}
           </nav>
 
-          {/* Desktop wallet + mobile hamburger */}
+          {/* Desktop wallet + theme toggle + mobile hamburger */}
           <div className="flex items-center gap-3">
+            <ThemeToggle />
             <div className="hidden md:block">
               {walletConfigured ? (
                 <ConnectKitButton />
@@ -76,7 +78,7 @@ export function Header() {
 
       {/* Mobile overlay */}
       {open && (
-        <div className="fixed inset-0 z-50 flex flex-col bg-[#080808]">
+        <div className="fixed inset-0 z-50 flex flex-col bg-background">
           {/* Top row */}
           <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
             <Link href="/" onClick={() => setOpen(false)} className="font-display text-3xl font-black tracking-wide text-[#f5a623]">
