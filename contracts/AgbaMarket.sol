@@ -31,6 +31,7 @@ contract AgbaMarket {
     address public immutable usdcToken;
     address public owner;
     uint256 public platformFeeBps = 150;
+    uint256 public accruedFees;
 
     event MarketCreated(uint256 indexed marketId, string question, string category, string country, uint256 resolvesAt);
     event Bet(uint256 indexed marketId, address indexed bettor, bool yes, uint256 amount);
@@ -111,8 +112,17 @@ contract AgbaMarket {
         uint256 fee = (grossProfit * platformFeeBps) / 10_000;
         uint256 payout = userWinningBet + grossProfit - fee;
         market.claimed[msg.sender] = true;
+        accruedFees += fee;
         require(IERC20(usdcToken).transfer(msg.sender, payout), "payout failed");
         emit Claim(marketId, msg.sender, payout);
+    }
+
+    function withdrawFees(address recipient, uint256 amount) external onlyOwner {
+        require(recipient != address(0), "recipient required");
+        require(amount > 0, "amount required");
+        require(amount <= accruedFees, "insufficient fees");
+        accruedFees -= amount;
+        require(IERC20(usdcToken).transfer(recipient, amount), "withdraw failed");
     }
 
     function getMarket(uint256 marketId)

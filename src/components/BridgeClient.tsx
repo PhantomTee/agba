@@ -1,6 +1,10 @@
 "use client";
 
+import { BridgeKit, type BridgeChainIdentifier, type BridgeResult } from "@circle-fin/bridge-kit";
+import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 import { useState } from "react";
+import type { EIP1193Provider } from "viem";
+import { useAccount, useWalletClient } from "wagmi";
 
 const BRIDGE_CHAINS = [
   "Ethereum_Sepolia",
@@ -22,7 +26,7 @@ type GasFeeStep = {
   name: string;
   token: string;
   blockchain: string;
-  fees: { gas: number; gasPrice: number; fee: string };
+  fees: { gas: bigint | number; gasPrice: bigint | number; fee: string } | null;
 };
 
 type ProviderFee = { type: string; token: string; amount: string };
@@ -43,30 +47,66 @@ const STEP_ICONS: Record<string, string> = {
 };
 
 export function BridgeClient() {
+  const { address, isConnected } = useAccount();
+  const { data: walletClient } = useWalletClient();
   const [fromChain, setFromChain] = useState("Base_Sepolia");
   const [toChain, setToChain] = useState("Arc_Testnet");
   const [amount, setAmount] = useState("");
   const [estimate, setEstimate] = useState<BridgeEstimate | null>(null);
   const [loading, setLoading] = useState(false);
+  const [bridging, setBridging] = useState(false);
+  const [bridgeStatus, setBridgeStatus] = useState("");
   const [error, setError] = useState("");
+
+  async function getBrowserBridgeParams() {
+    if (!isConnected || !address) throw new Error("Connect a wallet before bridging.");
+    if (!walletClient) throw new Error("Wallet client not ready. Try reconnecting your wallet.");
+    if (!amount || Number(amount) <= 0) throw new Error("Enter a positive USDC amount.");
+    const adapter = await createViemAdapterFromProvider({
+      provider: walletClient.transport as unknown as EIP1193Provider,
+    });
+    return {
+      from: { adapter, chain: fromChain as BridgeChainIdentifier },
+      to: { adapter, chain: toChain as BridgeChainIdentifier },
+      amount,
+      token: "USDC" as const,
+    };
+  }
 
   async function estimateBridge() {
     setLoading(true);
     setError("");
+    setBridgeStatus("");
     setEstimate(null);
     try {
-      const response = await fetch("/api/bridge/estimate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fromChain, toChain, amount }),
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Unable to estimate bridge transfer");
-      setEstimate(data.estimate as BridgeEstimate);
+      const kit = new BridgeKit({ disableErrorReporting: true });
+      const nextEstimate = await kit.estimate(await getBrowserBridgeParams());
+      setEstimate(nextEstimate as unknown as BridgeEstimate);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Unable to estimate bridge transfer");
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function executeBridge() {
+    setBridging(true);
+    setError("");
+    setBridgeStatus("Preparing bridge transaction...");
+    try {
+      const kit = new BridgeKit({ disableErrorReporting: true });
+      kit.on("*", (payload) => {
+        if (payload && typeof payload === "object" && "method" in payload) {
+          setBridgeStatus(`Bridge step: ${String(payload.method)}`);
+        }
+      });
+      const result = (await kit.bridge(await getBrowserBridgeParams())) as BridgeResult;
+      setBridgeStatus(result.state === "success" ? "Bridge completed." : "Bridge submitted. Check the transaction steps for status.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Unable to execute bridge transfer");
+      setBridgeStatus("");
+    } finally {
+      setBridging(false);
     }
   }
 
@@ -219,7 +259,7 @@ export function BridgeClient() {
                     {/* Fee */}
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-white">
-                        {Number(step.fees.fee).toFixed(6)}
+                        {step.fees ? Number(step.fees.fee).toFixed(6) : "0.000000"}
                       </p>
                       <p className="text-xs text-white/40">{step.token}</p>
                     </div>
@@ -270,6 +310,15 @@ export function BridgeClient() {
               </p>
             </div>
           )}
+
+          <button
+            onClick={executeBridge}
+            disabled={bridging}
+            className="w-full bg-[#2d6a4f] px-5 py-4 text-sm font-black uppercase tracking-[0.15em] text-white transition-opacity disabled:opacity-40 hover:opacity-90"
+          >
+            {bridging ? "Bridging..." : "Bridge USDC"}
+          </button>
+          {bridgeStatus && <p className="text-sm text-[#f5a623]">{bridgeStatus}</p>}
         </div>
       )}
 

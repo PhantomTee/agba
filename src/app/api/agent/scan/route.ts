@@ -21,16 +21,8 @@ export async function POST(request: NextRequest) {
   }
   const supabase = getSupabaseAdmin();
 
-  // Clean up news items that were never used to create a market and are older than 6 hours
-  await supabase
-    .from("news_items")
-    .delete()
-    .eq("market_created", false)
-    .lt("scanned_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
-
   const parser = new Parser();
   // Cap market creation at 3 per run so we stay well within the 60-second limit.
-  // Articles that were skipped will be deleted after 6 h if unused and re-processed next run.
   const MAX_MARKETS_PER_RUN = 3;
   let articlesScanned = 0;
   let marketsCreated = 0;
@@ -118,7 +110,10 @@ export async function POST(request: NextRequest) {
           }
         })
         .find((parsed: { name?: string } | undefined) => parsed?.name === "MarketCreated");
-      const marketId = event?.args?.marketId ? Number(event.args.marketId) : Number(await contract.marketCount());
+      if (!event?.args?.marketId) {
+        throw new Error("MarketCreated event missing from createMarket transaction");
+      }
+      const marketId = Number(event.args.marketId);
       const resolvesAt = new Date(Date.now() + decision.durationDays * 86_400_000).toISOString();
       const { error: marketError } = await supabase.from("markets").insert({
         id: marketId,

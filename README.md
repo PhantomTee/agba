@@ -11,8 +11,8 @@ Agba is a Next.js 14 app that reads African RSS news, uses Groq to turn suitable
 - Groq SDK with `llama-3.3-70b-versatile`
 - Ethers v6 for Arc RPC, market creation, bet verification, and resolution
 - wagmi v2 and ConnectKit for wallet connection
-- Vercel Cron routes for scanning and resolution
-- Circle Bridge Kit for CCTP USDC bridge estimates and server-wallet execution to Arc testnet
+- GitHub Actions cron triggers for scanning and resolution
+- Circle Bridge Kit for connected-wallet CCTP USDC bridge estimates and execution to Arc testnet
 - Polymarket CLOB V2 client configured with a builder code for off-Arc builder-fee reporting
 
 ## Required Environment
@@ -39,7 +39,6 @@ Deploy `contracts/AgbaMarket.sol` with the Arc testnet USDC address as construct
 - `NEXT_PUBLIC_ARC_RPC`
 - `NEXT_PUBLIC_ARC_CHAIN_ID`
 - `AGENT_PRIVATE_KEY`
-- `BRIDGE_ESTIMATE_PRIVATE_KEY`
 - `POLYMARKET_CLOB_HOST`
 - `POLYMARKET_CHAIN_ID`
 - `POLYMARKET_BUILDER_CODE`
@@ -57,12 +56,12 @@ npm run deploy:contract
 
 ## Cron
 
-`vercel.json` schedules:
+GitHub Actions is the scheduler of record in `.github/workflows/cron.yml`:
 
 - `POST /api/agent/scan` every 15 minutes
 - `POST /api/agent/resolve` daily at 07:00 UTC
 
-Set `CRON_SECRET` in production and send it as `Authorization: Bearer <secret>` or `x-cron-secret` when invoking cron routes outside Vercel.
+Vercel Cron is intentionally unused. Set `CRON_SECRET` in production and send it as `Authorization: Bearer <secret>` or `x-cron-secret`; production cron requests fail closed when the secret is missing or wrong.
 
 ## Admin Resolution
 

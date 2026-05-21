@@ -1,4 +1,4 @@
-import { formatUnits } from "ethers";
+import { formatUnits, parseUnits } from "ethers";
 import { type NextRequest } from "next/server";
 import { getArcProvider, getReadOnlyMarketContract } from "@/lib/chain";
 import { getEnv } from "@/lib/env";
@@ -27,6 +27,31 @@ export async function POST(request: NextRequest) {
       return safeJson({ error: "Transaction was not sent to the Àgbà market contract" }, { status: 400 });
     }
     const contract = getReadOnlyMarketContract();
+    const expectedAmount = parseUnits(String(amount), 6);
+    const betEvent = receipt.logs
+      .map((log) => {
+        try {
+          return contract.interface.parseLog(log);
+        } catch {
+          return null;
+        }
+      })
+      .find((event) => event?.name === "Bet");
+    if (!betEvent) {
+      return safeJson({ error: "Transaction did not emit an Agba Bet event" }, { status: 400 });
+    }
+    const eventMarketId = Number(betEvent.args.marketId);
+    const eventBettor = String(betEvent.args.bettor);
+    const eventSide = Boolean(betEvent.args.yes);
+    const eventAmount = BigInt(betEvent.args.amount);
+    if (
+      eventMarketId !== marketId ||
+      eventBettor.toLowerCase() !== walletAddress.toLowerCase() ||
+      eventSide !== side ||
+      eventAmount !== expectedAmount
+    ) {
+      return safeJson({ error: "Bet transaction details do not match the request" }, { status: 400 });
+    }
     const onchain = await contract.getMarket(marketId);
     const yesPool = Number(formatUnits(onchain.yesPool, 6));
     const noPool = Number(formatUnits(onchain.noPool, 6));
@@ -38,7 +63,7 @@ export async function POST(request: NextRequest) {
       amount_usdc: amount,
       tx_hash: txHash,
     });
-    if (betError) throw betError;
+    if (betError && betError.code !== "23505") throw betError;
     const { error: marketError } = await supabase.from("markets").update({ yes_pool: yesPool, no_pool: noPool }).eq("id", marketId);
     if (marketError) throw marketError;
     const total = yesPool + noPool;

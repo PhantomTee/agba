@@ -29,26 +29,6 @@ type ResolutionState = {
 export function AdminClient() {
   const { address, isConnected } = useAccount();
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_WALLET?.toLowerCase();
-
-  if (!isConnected) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="text-4xl font-black text-white/10">🔒</p>
-        <p className="text-lg font-black text-white/40">Connect your wallet to continue.</p>
-      </div>
-    );
-  }
-
-  if (!isAdmin) {
-    return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
-        <p className="text-4xl font-black text-white/10">⛔</p>
-        <p className="text-lg font-black text-white/40">Unauthorised.</p>
-        <p className="text-sm text-white/25">{address}</p>
-      </div>
-    );
-  }
-
   const [apiKey, setApiKey] = useState("");
   const [pending, setPending] = useState<PendingMarket[]>([]);
   const [fetchError, setFetchError] = useState("");
@@ -75,6 +55,25 @@ export function AdminClient() {
       setFetching(false);
     }
   }, [apiKey]);
+
+  if (!isConnected) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-4xl font-black text-white/10">🔒</p>
+        <p className="text-lg font-black text-white/40">Connect your wallet to continue.</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 px-4 text-center">
+        <p className="text-4xl font-black text-white/10">⛔</p>
+        <p className="text-lg font-black text-white/40">Unauthorised.</p>
+        <p className="text-sm text-white/25">{address}</p>
+      </div>
+    );
+  }
 
   function setResolutionField<K extends keyof ResolutionState>(marketId: number, key: K, value: ResolutionState[K]) {
     setResolutions((prev) => {

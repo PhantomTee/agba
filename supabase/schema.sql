@@ -50,6 +50,15 @@ create table if not exists pending_resolution (
   unique (market_id)
 );
 
+create index if not exists markets_status_created_idx on markets (resolved, created_at desc);
+create index if not exists markets_category_status_created_idx on markets (category, resolved, created_at desc);
+create index if not exists markets_country_status_created_idx on markets (country, resolved, created_at desc);
+create index if not exists bets_market_created_idx on bets (market_id, created_at desc);
+create index if not exists news_items_scanned_idx on news_items (scanned_at desc);
+create index if not exists news_items_country_scanned_idx on news_items (country, scanned_at desc);
+create index if not exists news_items_category_scanned_idx on news_items (groq_category, scanned_at desc);
+create index if not exists pending_resolution_status_created_idx on pending_resolution (resolved, created_at desc);
+
 alter publication supabase_realtime add table markets;
 alter publication supabase_realtime add table bets;
 alter publication supabase_realtime add table news_items;

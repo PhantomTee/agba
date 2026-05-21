@@ -3,7 +3,12 @@ import { getEnv, getOptionalEnv } from "./env";
 
 export function assertCronRequest(request: NextRequest) {
   const secret = getOptionalEnv("CRON_SECRET");
-  if (!secret) return;
+  if (!secret) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("CRON_SECRET must be configured in production");
+    }
+    return;
+  }
   const provided = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") || request.headers.get("x-cron-secret");
   if (provided !== secret) {
     throw new Error("Unauthorized cron request");

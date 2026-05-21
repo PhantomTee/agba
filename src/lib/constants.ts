@@ -55,6 +55,7 @@ export const MARKET_ABI = [
   "function bet(uint256 marketId,bool yes,uint256 amount) external",
   "function resolveMarket(uint256 marketId,bool outcome) external",
   "function claimWinnings(uint256 marketId) external",
+  "function withdrawFees(address recipient,uint256 amount) external",
   "function getMarket(uint256 marketId) view returns (uint256 id,string question,string category,string sourceCountry,string newsHeadline,string newsUrl,uint256 createdAt,uint256 resolvesAt,uint256 yesPool,uint256 noPool,bool resolved,bool outcome,address creator)",
   "function getUserBets(uint256 marketId,address user) view returns (uint256 yes,uint256 no)",
   "function getOpenMarkets() view returns (uint256[])",
