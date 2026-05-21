@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { getBridgeAdapter, getBridgeKit, parseBridgeChain } from "@/lib/bridge";
+import { safeJson } from "@/lib/json";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +11,7 @@ export async function POST(request: NextRequest) {
     const toChain = parseBridgeChain(String(body.toChain || ""));
     const amount = String(body.amount || "");
     if (!amount || Number(amount) <= 0) {
-      return NextResponse.json({ error: "fromChain, toChain, and positive amount are required" }, { status: 400 });
+      return safeJson({ error: "fromChain, toChain, and positive amount are required" }, { status: 400 });
     }
     const kit = getBridgeKit();
     const adapter = getBridgeAdapter();
@@ -20,9 +21,9 @@ export async function POST(request: NextRequest) {
       amount,
       token: "USDC",
     });
-    return NextResponse.json({ result });
+    return safeJson({ result });
   } catch (error) {
-    return NextResponse.json(
+    return safeJson(
       { error: error instanceof Error ? error.message : "Unable to execute Circle CCTP bridge transfer" },
       { status: 500 },
     );

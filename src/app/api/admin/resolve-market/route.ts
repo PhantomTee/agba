@@ -1,6 +1,7 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { getMarketContract } from "@/lib/chain";
 import { assertAdminRequest } from "@/lib/auth";
+import { safeJson } from "@/lib/json";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +14,7 @@ export async function POST(request: NextRequest) {
     const outcome = Boolean(body.outcome);
     const adminNote = String(body.adminNote || "");
     if (!Number.isInteger(marketId)) {
-      return NextResponse.json({ error: "marketId is required" }, { status: 400 });
+      return safeJson({ error: "marketId is required" }, { status: 400 });
     }
     const contract = getMarketContract();
     const tx = await contract.resolveMarket(marketId, outcome);
@@ -33,9 +34,9 @@ export async function POST(request: NextRequest) {
       .update({ resolved: true, admin_note: adminNote })
       .eq("market_id", marketId);
     if (pendingError) throw pendingError;
-    return NextResponse.json({ success: true, txHash: receipt?.hash || tx.hash });
+    return safeJson({ success: true, txHash: receipt?.hash || tx.hash });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unable to resolve market";
-    return NextResponse.json({ error: message }, { status: message.startsWith("Unauthorized") ? 401 : 500 });
+    return safeJson({ error: message }, { status: message.startsWith("Unauthorized") ? 401 : 500 });
   }
 }

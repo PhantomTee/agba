@@ -1,6 +1,7 @@
 import { formatUnits } from "ethers";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { getReadOnlyMarketContract } from "@/lib/chain";
+import { safeJson } from "@/lib/json";
 import { fetchMarkets } from "@/lib/data";
 
 export const dynamic = "force-dynamic";
@@ -31,8 +32,8 @@ export async function GET(request: NextRequest) {
         };
       }),
     );
-    return NextResponse.json({ markets: enriched });
+    return safeJson({ markets: enriched });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to fetch markets" }, { status: 500 });
+    return safeJson({ error: error instanceof Error ? error.message : "Unable to fetch markets" }, { status: 500 });
   }
 }

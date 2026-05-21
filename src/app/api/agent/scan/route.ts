@@ -1,9 +1,10 @@
 import Parser from "rss-parser";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { assertCronRequest } from "@/lib/auth";
 import { getMarketContract } from "@/lib/chain";
 import { NEWS_SOURCES } from "@/lib/constants";
 import { analyzeNewsForMarket } from "@/lib/groq";
+import { safeJson } from "@/lib/json";
 import { keywordOverlapRatio } from "@/lib/similarity";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
   try {
     assertCronRequest(request);
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unauthorized cron request" }, { status: 401 });
+    return safeJson({ error: error instanceof Error ? error.message : "Unauthorized cron request" }, { status: 401 });
   }
   const supabase = getSupabaseAdmin();
 
@@ -28,6 +29,9 @@ export async function POST(request: NextRequest) {
     .lt("scanned_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
 
   const parser = new Parser();
+  // Cap market creation at 3 per run so we stay well within the 60-second limit.
+  // Articles that were skipped will be deleted after 6 h if unused and re-processed next run.
+  const MAX_MARKETS_PER_RUN = 3;
   let articlesScanned = 0;
   let marketsCreated = 0;
   let rejected = 0;
@@ -134,6 +138,7 @@ export async function POST(request: NextRequest) {
         payload: { marketId, question: decision.question, category: decision.category, country: item.country },
       });
       marketsCreated += 1;
+      if (marketsCreated >= MAX_MARKETS_PER_RUN) break;
     } catch (error) {
       rejected += 1;
       const { error: reasonError } = await supabase
@@ -143,5 +148,5 @@ export async function POST(request: NextRequest) {
       if (reasonError) throw reasonError;
     }
   }
-  return NextResponse.json({ articlesScanned, marketsCreated, rejected });
+  return safeJson({ articlesScanned, marketsCreated, rejected });
 }

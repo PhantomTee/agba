@@ -1,6 +1,7 @@
 import { formatUnits } from "ethers";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 import { getReadOnlyMarketContract } from "@/lib/chain";
+import { safeJson } from "@/lib/json";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +9,7 @@ export const dynamic = "force-dynamic";
 export async function GET(_: NextRequest, { params }: { params: { id: string } }) {
   try {
     const id = Number(params.id);
-    if (!Number.isInteger(id)) return NextResponse.json({ error: "Invalid market id" }, { status: 400 });
+    if (!Number.isInteger(id)) return safeJson({ error: "Invalid market id" }, { status: 400 });
     const supabase = getSupabaseAdmin();
     const [{ data: market, error: marketError }, { data: bets, error: betsError }] = await Promise.all([
       supabase.from("markets").select("*, news_items(*)").eq("id", id).single(),
@@ -26,7 +27,7 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       .order("created_at", { ascending: false })
       .limit(5);
     if (relatedError) throw relatedError;
-    return NextResponse.json({
+    return safeJson({
       market: {
         ...market,
         yes_pool: Number(formatUnits(onchain.yesPool, 6)),
@@ -36,6 +37,6 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       related: related || [],
     });
   } catch (error) {
-    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to fetch market" }, { status: 500 });
+    return safeJson({ error: error instanceof Error ? error.message : "Unable to fetch market" }, { status: 500 });
   }
 }
