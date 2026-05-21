@@ -42,3 +42,5 @@ node_modules_broken_*/
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

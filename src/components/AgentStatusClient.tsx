@@ -1,8 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { PolymarketBuilderPanel } from "./PolymarketBuilderPanel";
-
 type Stats = {
   totalMarkets: number;
   openMarkets: number;
@@ -90,7 +88,6 @@ export function AgentStatusClient() {
           ))}
         </div>
       </section>
-      <PolymarketBuilderPanel />
     </main>
   );
 }
