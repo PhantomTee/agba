@@ -49,8 +49,15 @@ html.light .border-white\/15  { border-color: rgb(15 15 15 / 0.15); }
 html.light .border-white\/20  { border-color: rgb(15 15 15 / 0.2); }
 
 /* ── Light mode: background overrides ───────────────────── */
-html.light .bg-white\/5       { background-color: rgb(15 15 15 / 0.04); }
-html.light .bg-white\/10      { background-color: rgb(15 15 15 / 0.08); }
+html.light .bg-white\/5           { background-color: rgb(15 15 15 / 0.04); }
+html.light .bg-white\/10          { background-color: rgb(15 15 15 / 0.08); }
+/* Input / select / card surfaces that hardcode black */
+html.light .bg-black              { background-color: #edeae3; }
+html.light .bg-white\/\[0\.03\]   { background-color: rgb(15 15 15 / 0.03); }
+
+/* Placeholder text in light mode */
+html.light input::placeholder,
+html.light textarea::placeholder { color: rgb(15 15 15 / 0.35); }
 
 /* Red/error stays readable in both modes */
 html.light .text-red-200      { color: #b91c1c; }
