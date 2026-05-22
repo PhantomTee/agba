@@ -48,7 +48,7 @@ export function MarketCard({ market }: { market: Market }) {
           NO {odds.noOdds}%
         </Link>
       </div>
-      <div className="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-white/45">USDC {formatUsdc(total)} at stake</div>
+      <div className="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-white/45"> {formatUsdc(total)} USDC at stake</div>
     </article>
   );
 }
