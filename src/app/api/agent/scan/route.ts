@@ -21,14 +21,6 @@ export async function POST(request: NextRequest) {
   }
   const supabase = getSupabaseAdmin();
 
-  // Delete news items older than 6 hours that never became a market,
-  // so stale articles can be re-fetched and re-evaluated next run.
-  await supabase
-    .from("news_items")
-    .delete()
-    .eq("market_created", false)
-    .lt("scanned_at", new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString());
-
   const parser = new Parser();
   // Cap market creation at 3 per run so we stay well within the 60-second limit.
   const MAX_MARKETS_PER_RUN = 3;
@@ -123,16 +115,24 @@ export async function POST(request: NextRequest) {
       }
       const marketId = Number(event.args.marketId);
       const resolvesAt = new Date(Date.now() + decision.durationDays * 86_400_000).toISOString();
-      const { error: marketError } = await supabase.from("markets").insert({
+      const marketPayload = {
         id: marketId,
         question: decision.question,
         category: decision.category,
         country: item.country,
         news_item_id: inserted.id,
         resolution_criteria: decision.resolutionCriteria,
+        groq_yes_probability: decision.yesProbability,
         resolves_at: resolvesAt,
-      });
-      if (marketError) throw marketError;
+      };
+      const { error: marketError } = await supabase.from("markets").insert(marketPayload);
+      if (marketError && isMissingColumnError(marketError, "groq_yes_probability")) {
+        const { groq_yes_probability: _unused, ...legacyMarketPayload } = marketPayload;
+        const { error: legacyMarketError } = await supabase.from("markets").insert(legacyMarketPayload);
+        if (legacyMarketError) throw legacyMarketError;
+      } else if (marketError) {
+        throw marketError;
+      }
       const { error: createdError } = await supabase.from("news_items").update({ market_created: true }).eq("id", inserted.id);
       if (createdError) throw createdError;
       await supabase.channel("new_market").send({
@@ -152,4 +152,8 @@ export async function POST(request: NextRequest) {
     }
   }
   return safeJson({ articlesScanned, marketsCreated, rejected });
+}
+
+function isMissingColumnError(error: { code?: string; message?: string }, column: string) {
+  return error.code === "PGRST204" || Boolean(error.message?.includes(column) && error.message.toLowerCase().includes("column"));
 }

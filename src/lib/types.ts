@@ -24,6 +24,7 @@ export type Market = {
   country: string | null;
   news_item_id: string | null;
   resolution_criteria: string | null;
+  groq_yes_probability: number | null;
   yes_pool: number;
   no_pool: number;
   created_at: string;
@@ -52,4 +53,5 @@ export type AgentDecision = {
   durationDays: 7 | 14 | 30;
   resolutionCriteria: string;
   reasoning: string;
+  yesProbability: number | null;
 };

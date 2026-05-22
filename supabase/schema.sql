@@ -22,6 +22,7 @@ create table if not exists markets (
   country text,
   news_item_id uuid references news_items(id),
   resolution_criteria text,
+  groq_yes_probability numeric check (groq_yes_probability >= 1 and groq_yes_probability <= 99),
   yes_pool numeric default 0,
   no_pool numeric default 0,
   created_at timestamptz default now(),

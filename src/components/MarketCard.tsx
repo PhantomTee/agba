@@ -4,7 +4,7 @@ import { calculateOdds, formatUsdc, timeRemaining } from "@/lib/odds";
 import type { Market } from "@/lib/types";
 
 export function MarketCard({ market }: { market: Market }) {
-  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0));
+  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0), market.groq_yes_probability);
   const total = Number(market.yes_pool || 0) + Number(market.no_pool || 0);
   return (
     <article className="relative border-b border-white/10 py-7">
@@ -35,6 +35,11 @@ export function MarketCard({ market }: { market: Market }) {
       <div className="mt-5 overflow-hidden border border-white/10 bg-white/5">
         <div className="h-3 bg-[#f5a623]" style={{ width: `${odds.yesOdds}%` }} />
       </div>
+      {odds.source !== "pool" && (
+        <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-white/40">
+          {odds.source === "ai" ? "AI initial view until bets set pool odds" : "Neutral opening view until bets set pool odds"}
+        </p>
+      )}
       <div className="mt-4 grid grid-cols-2 gap-3">
         <Link href={`/market/${market.id}?side=yes`} className="bg-[#f5a623] px-4 py-3 text-center text-sm font-black text-black">
           YES {odds.yesOdds}%

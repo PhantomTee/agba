@@ -78,7 +78,10 @@ REJECT (suitable: false) ONLY when:
 - Absolutely no plausible resolution date within 30 days.
 
 Output ONLY valid JSON - no markdown, no backticks, no commentary:
-{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string}`,
+When suitable is true, estimate the chance that the generated question resolves YES as yesProbability from 1 to 99. Use 50 only when the public evidence gives no directional signal. This is an analyst view, not a pool size or certainty.
+
+Output ONLY valid JSON - no markdown, no backticks, no commentary:
+{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string,"yesProbability":number|null}`,
       },
       {
         role: "user",
@@ -108,5 +111,12 @@ function normalizeDecision(parsed: Partial<AgentDecision>): AgentDecision {
     durationDays: duration,
     resolutionCriteria: String(parsed.resolutionCriteria || ""),
     reasoning: String(parsed.reasoning || ""),
+    yesProbability: normalizeYesProbability(parsed.yesProbability),
   };
+}
+
+function normalizeYesProbability(value: unknown) {
+  const probability = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(probability)) return null;
+  return Math.min(99, Math.max(1, Math.round(probability)));
 }

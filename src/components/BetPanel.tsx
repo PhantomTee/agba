@@ -21,7 +21,7 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0));
+  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0), market.groq_yes_probability);
   const estimated = estimatePayout(Number(amount || "0"), side, Number(market.yes_pool || 0), Number(market.no_pool || 0));
 
   async function placeBet() {
@@ -112,6 +112,11 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
           NO {odds.noOdds}%
         </button>
       </div>
+      {odds.source !== "pool" && (
+        <p className="mt-3 text-xs font-bold uppercase tracking-[0.18em] text-white/40">
+          {odds.source === "ai" ? "AI initial view until bets set pool odds" : "Neutral opening view until bets set pool odds"}
+        </p>
+      )}
       <label className="mt-5 block text-xs font-black uppercase tracking-[0.2em] text-white/45">Amount USDC</label>
       <input
         value={amount}
