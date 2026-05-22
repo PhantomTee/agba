@@ -1,4 +1,5 @@
 import { type NextRequest } from "next/server";
+import { formatUnits } from "ethers";
 import { getMarketContract } from "@/lib/chain";
 import { assertAdminRequest } from "@/lib/auth";
 import { safeJson } from "@/lib/json";
@@ -19,6 +20,7 @@ export async function POST(request: NextRequest) {
     const contract = getMarketContract();
     const tx = await contract.resolveMarket(marketId, outcome);
     const receipt = await tx.wait();
+    const yieldEarned = extractYieldEarned(contract, receipt);
     const supabase = getSupabaseAdmin();
     const { error: marketError } = await supabase
       .from("markets")
@@ -26,6 +28,7 @@ export async function POST(request: NextRequest) {
         resolved: true,
         outcome,
         groq_resolution_reasoning: adminNote || "Manually resolved by admin",
+        yield_earned: yieldEarned,
       })
       .eq("id", marketId);
     if (marketError) throw marketError;
@@ -39,4 +42,17 @@ export async function POST(request: NextRequest) {
     const message = error instanceof Error ? error.message : "Unable to resolve market";
     return safeJson({ error: message }, { status: message.startsWith("Unauthorized") ? 401 : 500 });
   }
+}
+
+function extractYieldEarned(contract: ReturnType<typeof getMarketContract>, receipt: { logs?: unknown[] } | null | undefined) {
+  const log = receipt?.logs
+    ?.map((entry) => {
+      try {
+        return contract.interface.parseLog(entry as never);
+      } catch {
+        return null;
+      }
+    })
+    .find((entry) => entry?.name === "MarketUSYCRedeemed");
+  return log?.args?.yieldEarned ? Number(formatUnits(log.args.yieldEarned, 6)) : 0;
 }

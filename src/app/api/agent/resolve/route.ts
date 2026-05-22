@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { formatUnits } from "ethers";
 import { assertCronRequest } from "@/lib/auth";
 import { getMarketContract } from "@/lib/chain";
 import { getEnv, getOptionalEnv } from "@/lib/env";
@@ -108,13 +109,27 @@ function extractNairaThreshold(question: string) {
 async function resolveOnchainAndDb(marketId: number, outcome: boolean, reasoning: string) {
   const contract = getMarketContract();
   const tx = await contract.resolveMarket(marketId, outcome);
-  await tx.wait();
+  const receipt = await tx.wait();
+  const yieldEarned = extractYieldEarned(contract, receipt);
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("markets")
-    .update({ resolved: true, outcome, groq_resolution_reasoning: reasoning })
+    .update({ resolved: true, outcome, groq_resolution_reasoning: reasoning, yield_earned: yieldEarned })
     .eq("id", marketId);
   if (error) throw error;
+}
+
+function extractYieldEarned(contract: ReturnType<typeof getMarketContract>, receipt: { logs?: unknown[] } | null | undefined) {
+  const log = receipt?.logs
+    ?.map((entry) => {
+      try {
+        return contract.interface.parseLog(entry as never);
+      } catch {
+        return null;
+      }
+    })
+    .find((entry) => entry?.name === "MarketUSYCRedeemed");
+  return log?.args?.yieldEarned ? Number(formatUnits(log.args.yieldEarned, 6)) : 0;
 }
 
 async function notifyManualResolution(marketId: number, question: string) {

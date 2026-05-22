@@ -25,8 +25,14 @@ export type Market = {
   news_item_id: string | null;
   resolution_criteria: string | null;
   groq_yes_probability: number | null;
+  initial_probability_yes: number | null;
   yes_pool: number;
   no_pool: number;
+  eurc_yes_pool: number;
+  eurc_no_pool: number;
+  usyc_invested: boolean | null;
+  yield_earned: number | null;
+  agent_seeded: boolean | null;
   created_at: string;
   resolves_at: string | null;
   resolved: boolean;
@@ -34,6 +40,7 @@ export type Market = {
   groq_resolution_reasoning: string | null;
   news_items?: NewsItem | null;
   userBets?: { yes: string; no: string };
+  userEURCBets?: { yes: string; no: string };
 };
 
 export type Bet = {
@@ -42,6 +49,7 @@ export type Bet = {
   wallet_address: string;
   side: boolean;
   amount_usdc: number;
+  currency?: "USDC" | "EURC";
   tx_hash: string | null;
   created_at: string;
 };
@@ -54,4 +62,5 @@ export type AgentDecision = {
   resolutionCriteria: string;
   reasoning: string;
   yesProbability: number | null;
+  initialProbabilityYes: number;
 };

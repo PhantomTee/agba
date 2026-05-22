@@ -52,22 +52,35 @@ export const COUNTRY_FLAGS: Record<string, string> = {
 
 export const MARKET_ABI = [
   "function createMarket(string question,string category,string country,string headline,string newsUrl,uint256 durationDays) external returns (uint256)",
+  "function createMarket(string question,string category,string country,string headline,string newsUrl,uint256 durationDays,uint256 initialProbabilityYes) external returns (uint256)",
   "function bet(uint256 marketId,bool yes,uint256 amount) external",
+  "function betEURC(uint256 marketId,bool yes,uint256 amount) external",
   "function resolveMarket(uint256 marketId,bool outcome) external",
   "function claimWinnings(uint256 marketId) external",
+  "function claimEURCWinnings(uint256 marketId) external",
   "function withdrawFees(address recipient,uint256 amount) external",
-  "function getMarket(uint256 marketId) view returns (uint256 id,string question,string category,string sourceCountry,string newsHeadline,string newsUrl,uint256 createdAt,uint256 resolvesAt,uint256 yesPool,uint256 noPool,bool resolved,bool outcome,address creator)",
+  "function investInUSYC(uint256 marketId,uint256 usdcAmount) external",
+  "function getMarket(uint256 marketId) view returns (uint256 id,string question,string category,string sourceCountry,string newsHeadline,string newsUrl,uint256 createdAt,uint256 resolvesAt,uint256 yesPool,uint256 noPool,uint256 initialProbabilityYes,bool resolved,bool outcome,address creator)",
+  "function getEURCPools(uint256 marketId) view returns (uint256 yesPool,uint256 noPool)",
   "function getUserBets(uint256 marketId,address user) view returns (uint256 yes,uint256 no)",
+  "function getUserEURCBets(uint256 marketId,address user) view returns (uint256 yes,uint256 no)",
+  "function getMarketUSYCBalance(uint256 marketId) view returns (uint256)",
+  "function getMarketYieldEarned(uint256 marketId) view returns (uint256)",
   "function getOpenMarkets() view returns (uint256[])",
   "function getMarketsByCategory(string category) view returns (uint256[])",
   "function marketCount() view returns (uint256)",
   "event MarketCreated(uint256 indexed marketId,string question,string category,string country,uint256 resolvesAt)",
   "event Bet(uint256 indexed marketId,address indexed bettor,bool yes,uint256 amount)",
+  "event EURCBet(uint256 indexed marketId,address indexed bettor,bool yes,uint256 amount)",
   "event Claim(uint256 indexed marketId,address indexed user,uint256 amount)",
+  "event EURCClaim(uint256 indexed marketId,address indexed user,uint256 amount)",
+  "event MarketUSYCInvested(uint256 indexed marketId,uint256 usdcAmount,uint256 usycShares)",
+  "event MarketUSYCRedeemed(uint256 indexed marketId,uint256 usdcReceived,uint256 yieldEarned)",
 ] as const;
 
 export const ERC20_ABI = [
   "function allowance(address owner,address spender) view returns (uint256)",
   "function approve(address spender,uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
+  "function balanceOf(address owner) view returns (uint256)",
 ] as const;

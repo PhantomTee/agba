@@ -49,6 +49,13 @@ export function MarketDetailClient({ id }: { id: string }) {
       <section>
         <p className="mb-3 text-sm font-black uppercase tracking-[0.28em] text-[#f5a623]">{market.category}</p>
         <h1 className="font-display text-5xl font-black leading-none text-white md:text-7xl">{market.question}</h1>
+        <div className="mt-5 flex flex-wrap gap-3">
+          {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
+          {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">💰 Earning yield in USYC while open</span>}
+          {market.resolved && Number(market.yield_earned || 0) > 0 && (
+            <span className="text-xs font-black text-[#2d6a4f]">+${formatUsdc(Number(market.yield_earned || 0))} yield earned for winners</span>
+          )}
+        </div>
         <div className="mt-8 border-l border-[#f5a623] bg-white/[0.03] p-5">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-white/45">Resolution criteria</h2>
           <p className="mt-3 text-white">{market.resolution_criteria || "No resolution criteria recorded."}</p>
@@ -77,7 +84,7 @@ export function MarketDetailClient({ id }: { id: string }) {
                     </span>
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className="text-sm font-bold text-white">USDC {formatUsdc(bet.amount_usdc)}</span>
+                    <span className="text-sm font-bold text-white">{bet.currency || "USDC"} {formatUsdc(bet.amount_usdc)}</span>
                     <p className="text-xs text-white/35">{new Date(bet.created_at).toLocaleString()}</p>
                   </div>
                 </div>

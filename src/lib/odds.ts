@@ -1,6 +1,7 @@
 export function calculateOdds(yesPool: number, noPool: number, initialYesProbability?: number | null) {
   const total = yesPool + noPool;
-  if (total <= 0) {
+  const hasEnoughLiquidity = total > 5;
+  if (!hasEnoughLiquidity) {
     const initialOdds = normalizeInitialOdds(initialYesProbability);
     const source = initialYesProbability == null ? "neutral" : "ai";
     return { yesOdds: initialOdds, noOdds: 100 - initialOdds, source };
@@ -25,5 +26,5 @@ export function timeRemaining(iso: string | null) {
 
 function normalizeInitialOdds(initialYesProbability?: number | null) {
   if (initialYesProbability == null || !Number.isFinite(initialYesProbability)) return 50;
-  return Math.min(99, Math.max(1, Math.round(initialYesProbability)));
+  return Math.min(100, Math.max(0, Math.round(initialYesProbability)));
 }

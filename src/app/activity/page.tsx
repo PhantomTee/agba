@@ -18,7 +18,7 @@ async function fetchInitialPredictions(): Promise<PredictionActivity[]> {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("bets")
-    .select("id,market_id,wallet_address,side,amount_usdc,tx_hash,created_at,markets(id,question,category,country,resolved,outcome)")
+    .select("id,market_id,wallet_address,side,amount_usdc,currency,tx_hash,created_at,markets(id,question,category,country,resolved,outcome)")
     .order("created_at", { ascending: false })
     .limit(100);
 

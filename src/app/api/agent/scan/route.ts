@@ -1,8 +1,10 @@
 import Parser from "rss-parser";
+import { Contract, MaxUint256, formatUnits, parseUnits } from "ethers";
 import { type NextRequest } from "next/server";
 import { assertCronRequest } from "@/lib/auth";
-import { getMarketContract } from "@/lib/chain";
-import { NEWS_SOURCES } from "@/lib/constants";
+import { getAgentWallet, getMarketContract } from "@/lib/chain";
+import { ERC20_ABI, NEWS_SOURCES } from "@/lib/constants";
+import { getEnv } from "@/lib/env";
 import { analyzeNewsForMarket } from "@/lib/groq";
 import { safeJson } from "@/lib/json";
 import { keywordOverlapRatio } from "@/lib/similarity";
@@ -92,13 +94,14 @@ export async function POST(request: NextRequest) {
         continue;
       }
       const contract = getMarketContract();
-      const tx = await contract.createMarket(
+      const tx = await contract["createMarket(string,string,string,string,string,uint256,uint256)"](
         decision.question,
         decision.category,
         item.country,
         item.title,
         url,
         decision.durationDays,
+        decision.initialProbabilityYes,
       );
       const receipt = await tx.wait();
       const event = receipt?.logs
@@ -123,15 +126,36 @@ export async function POST(request: NextRequest) {
         news_item_id: inserted.id,
         resolution_criteria: decision.resolutionCriteria,
         groq_yes_probability: decision.yesProbability,
+        initial_probability_yes: decision.initialProbabilityYes,
         resolves_at: resolvesAt,
       };
       const { error: marketError } = await supabase.from("markets").insert(marketPayload);
-      if (marketError && isMissingColumnError(marketError, "groq_yes_probability")) {
-        const { groq_yes_probability: _unused, ...legacyMarketPayload } = marketPayload;
+      if (marketError && isMissingOptionalMarketColumnError(marketError)) {
+        const { groq_yes_probability: _unusedGroq, initial_probability_yes: _unusedInitial, ...legacyMarketPayload } = marketPayload;
         const { error: legacyMarketError } = await supabase.from("markets").insert(legacyMarketPayload);
         if (legacyMarketError) throw legacyMarketError;
       } else if (marketError) {
         throw marketError;
+      }
+      const seedResult = await seedMarketLiquidity(contract, marketId, decision.initialProbabilityYes);
+      if (seedResult.seeded) {
+        const { error: seedUpdateError } = await supabase
+          .from("markets")
+          .update({
+            yes_pool: seedResult.yesPool,
+            no_pool: seedResult.noPool,
+            agent_seeded: true,
+          })
+          .eq("id", marketId);
+        if (seedUpdateError && !isMissingOptionalMarketColumnError(seedUpdateError)) throw seedUpdateError;
+      }
+      const investResult = await investIdleUSYC(contract, marketId, seedResult.totalPool);
+      if (investResult.invested) {
+        const { error: investUpdateError } = await supabase
+          .from("markets")
+          .update({ usyc_invested: true })
+          .eq("id", marketId);
+        if (investUpdateError && !isMissingOptionalMarketColumnError(investUpdateError)) throw investUpdateError;
       }
       const { error: createdError } = await supabase.from("news_items").update({ market_created: true }).eq("id", inserted.id);
       if (createdError) throw createdError;
@@ -156,4 +180,50 @@ export async function POST(request: NextRequest) {
 
 function isMissingColumnError(error: { code?: string; message?: string }, column: string) {
   return error.code === "PGRST204" || Boolean(error.message?.includes(column) && error.message.toLowerCase().includes("column"));
+}
+
+function isMissingOptionalMarketColumnError(error: { code?: string; message?: string }) {
+  return ["groq_yes_probability", "initial_probability_yes", "agent_seeded", "usyc_invested"].some((column) => isMissingColumnError(error, column));
+}
+
+async function seedMarketLiquidity(contract: ReturnType<typeof getMarketContract>, marketId: number, probability: number) {
+  try {
+    const totalSeed = parseUnits("2", 6);
+    const yesAmount = (totalSeed * BigInt(Math.floor(probability))) / BigInt(100);
+    const noAmount = totalSeed - yesAmount;
+    const usdc = new Contract(getEnv("NEXT_PUBLIC_USDC_ADDRESS"), ERC20_ABI, contract.runner);
+    const spender = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
+    const agentAddress = getAgentWallet().address;
+    const allowance = await usdc.allowance(agentAddress, spender);
+    if (allowance < totalSeed) {
+      const approveTx = await usdc.approve(spender, MaxUint256);
+      await approveTx.wait();
+    }
+    if (yesAmount > BigInt(0)) {
+      const yesTx = await contract.bet(marketId, true, yesAmount);
+      await yesTx.wait();
+    }
+    if (noAmount > BigInt(0)) {
+      const noTx = await contract.bet(marketId, false, noAmount);
+      await noTx.wait();
+    }
+    const onchain = await contract.getMarket(marketId);
+    const yesPool = Number(formatUnits(onchain.yesPool, 6));
+    const noPool = Number(formatUnits(onchain.noPool, 6));
+    return { seeded: true, yesPool, noPool, totalPool: yesPool + noPool };
+  } catch {
+    return { seeded: false, yesPool: 0, noPool: 0, totalPool: 0 };
+  }
+}
+
+async function investIdleUSYC(contract: ReturnType<typeof getMarketContract>, marketId: number, totalPool: number) {
+  try {
+    if (totalPool <= 10) return { invested: false };
+    const investAmount = parseUnits(String(totalPool / 2), 6);
+    const tx = await contract.investInUSYC(marketId, investAmount);
+    await tx.wait();
+    return { invested: true };
+  } catch {
+    return { invested: false };
+  }
 }

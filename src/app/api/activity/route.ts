@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
 
     let query = supabase
       .from("bets")
-      .select("id,market_id,wallet_address,side,amount_usdc,tx_hash,created_at,markets(id,question,category,country,resolved,outcome)")
+      .select("id,market_id,wallet_address,side,amount_usdc,currency,tx_hash,created_at,markets(id,question,category,country,resolved,outcome)")
       .order("created_at", { ascending: false })
       .limit(limit);
     if (wallet) query = query.ilike("wallet_address", wallet);
@@ -80,6 +80,7 @@ async function fetchWalletChainPredictions(wallet: string, limit: number): Promi
       wallet_address: String(log.args.bettor),
       side: Boolean(log.args.yes),
       amount_usdc: Number(formatUnits(log.args.amount, 6)),
+      currency: "USDC" as const,
       tx_hash: log.transactionHash,
       created_at: blockTimes.get(log.blockNumber) || new Date(0).toISOString(),
       markets: null,

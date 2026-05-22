@@ -18,7 +18,12 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
     ]);
     if (marketError) throw marketError;
     const contract = getReadOnlyMarketContract();
-    const onchain = await contract.getMarket(id);
+    const [onchain, eurcPools, usycBalance, yieldEarned] = await Promise.all([
+      contract.getMarket(id),
+      contract.getEURCPools(id),
+      contract.getMarketUSYCBalance(id),
+      contract.getMarketYieldEarned(id),
+    ]);
     const chainTotal = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
     const recordedTotal = databaseBets.reduce((total, bet) => total + Number(bet.amount_usdc || 0), 0);
     const chainBets = chainTotal > recordedTotal ? await fetchChainBets(id) : [];
@@ -35,6 +40,11 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
         ...market,
         yes_pool: Number(formatUnits(onchain.yesPool, 6)),
         no_pool: Number(formatUnits(onchain.noPool, 6)),
+        eurc_yes_pool: Number(formatUnits(eurcPools.yesPool, 6)),
+        eurc_no_pool: Number(formatUnits(eurcPools.noPool, 6)),
+        initial_probability_yes: Number(onchain.initialProbabilityYes ?? market.initial_probability_yes ?? 50),
+        usyc_invested: Number(usycBalance) > 0 || Boolean(market.usyc_invested),
+        yield_earned: Number(formatUnits(yieldEarned, 6)),
       },
       bets: mergeBetHistory(databaseBets, chainBets),
       related: related || [],
@@ -73,8 +83,11 @@ async function fetchChainBets(marketId: number): Promise<Bet[]> {
 
   for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += blockRange + 1) {
     const toBlock = Math.min(latestBlock, fromBlock + blockRange);
-    const betLogs = await contract.queryFilter(contract.filters.Bet(marketId), fromBlock, toBlock);
-    logs.push(...betLogs);
+    const [usdcLogs, eurcLogs] = await Promise.all([
+      contract.queryFilter(contract.filters.Bet(marketId), fromBlock, toBlock),
+      contract.queryFilter(contract.filters.EURCBet(marketId), fromBlock, toBlock),
+    ]);
+    logs.push(...usdcLogs, ...eurcLogs);
   }
 
   const betLogs = logs.filter(isBetEvent);
@@ -93,6 +106,7 @@ async function fetchChainBets(marketId: number): Promise<Bet[]> {
     wallet_address: String(log.args.bettor),
     side: Boolean(log.args.yes),
     amount_usdc: Number(formatUnits(log.args.amount, 6)),
+    currency: log.eventName === "EURCBet" ? "EURC" : "USDC",
     tx_hash: log.transactionHash,
     created_at: blockTimes.get(log.blockNumber) || new Date(0).toISOString(),
   }));

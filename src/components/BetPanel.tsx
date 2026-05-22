@@ -10,19 +10,25 @@ import { publicConfig } from "@/lib/env";
 import { calculateOdds, formatUsdc } from "@/lib/odds";
 import type { Market } from "@/lib/types";
 
+type BetCurrency = "USDC" | "EURC";
+
 export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: Market; initialSide?: boolean; onBetPlaced?: () => void }) {
   const { address, chainId, isConnected } = useAccount();
   const walletConfig = publicConfig();
   const { data: connectorClient, refetch: refetchConnectorClient } = useConnectorClient({ chainId: walletConfig.arcChainId || undefined });
   const { isPending: switchingChain, switchChainAsync } = useSwitchChain();
   const [amount, setAmount] = useState("");
+  const [currency, setCurrency] = useState<BetCurrency>("USDC");
   const [side, setSide] = useState<boolean>(initialSide);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);
-  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0), market.groq_yes_probability);
-  const estimated = estimatePayout(Number(amount || "0"), side, Number(market.yes_pool || 0), Number(market.no_pool || 0));
+  const yesPool = currency === "EURC" ? Number(market.eurc_yes_pool || 0) : Number(market.yes_pool || 0);
+  const noPool = currency === "EURC" ? Number(market.eurc_no_pool || 0) : Number(market.no_pool || 0);
+  const odds = calculateOdds(yesPool, noPool, market.initial_probability_yes ?? market.groq_yes_probability);
+  const estimated = estimatePayout(Number(amount || "0"), side, yesPool, noPool);
+  const currencySymbol = currency === "EURC" ? "€" : "$";
 
   async function placeBet() {
     setError("");
@@ -32,8 +38,9 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
       return;
     }
     const config = publicConfig();
-    if (!config.contractAddress || !config.usdcAddress) {
-      setError("Contract and USDC addresses must be configured in environment variables.");
+    const tokenAddress = currency === "EURC" ? config.eurcAddress : config.usdcAddress;
+    if (!config.contractAddress || !tokenAddress) {
+      setError("Contract and token addresses must be configured in environment variables.");
       return;
     }
     const numericAmount = Number(amount);
@@ -46,26 +53,28 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
       const signer = await getArcSigner(config);
       if (!signer) return;
       const amountUnits = parseUnits(amount, 6);
-      const usdc = new Contract(config.usdcAddress, ERC20_ABI, signer);
+      const token = new Contract(tokenAddress, ERC20_ABI, signer);
       const marketContract = new Contract(config.contractAddress, MARKET_ABI, signer);
-      const allowance = await usdc.allowance(address, config.contractAddress);
+      const allowance = await token.allowance(address, config.contractAddress);
       if (allowance < amountUnits) {
-        setStatus("Approving USDC...");
-        const approveTx = await usdc.approve(config.contractAddress, MaxUint256);
+        setStatus(`Approving ${currency}...`);
+        const approveTx = await token.approve(config.contractAddress, MaxUint256);
         await approveTx.wait();
       }
       setStatus("Submitting bet to Arc...");
-      const betTx = await marketContract.bet(market.id, side, amountUnits);
+      const betTx = currency === "EURC"
+        ? await marketContract.betEURC(market.id, side, amountUnits)
+        : await marketContract.bet(market.id, side, amountUnits);
       const receipt = await betTx.wait();
       setStatus("Recording bet...");
       const response = await fetch("/api/bet", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ marketId: market.id, side, amount: numericAmount, txHash: receipt.hash, walletAddress: address }),
+        body: JSON.stringify({ marketId: market.id, side, amount: numericAmount, currency, txHash: receipt.hash, walletAddress: address }),
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bet transaction succeeded but recording failed");
-      setStatus("Bet recorded.");
+      setStatus(`${currency} bet recorded.`);
       onBetPlaced?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bet failed");
@@ -92,7 +101,7 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
       if (!signer) return;
       const marketContract = new Contract(config.contractAddress, MARKET_ABI, signer);
       setStatus("Claiming winnings on Arc...");
-      const tx = await marketContract.claimWinnings(market.id);
+      const tx = currency === "EURC" ? await marketContract.claimEURCWinnings(market.id) : await marketContract.claimWinnings(market.id);
       await tx.wait();
       setStatus("Claim completed.");
     } catch (err) {
@@ -104,6 +113,17 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
 
   return (
     <div className="border border-white/10 bg-white/[0.03] p-5">
+      <div className="mb-3 grid grid-cols-2 gap-2">
+        {(["USDC", "EURC"] as BetCurrency[]).map((item) => (
+          <button
+            key={item}
+            onClick={() => setCurrency(item)}
+            className={`py-2 text-xs font-black ${currency === item ? "bg-white text-black" : "bg-white/10 text-white"}`}
+          >
+            {item}
+          </button>
+        ))}
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <button onClick={() => setSide(true)} className={`py-3 text-sm font-black ${side ? "bg-[#f5a623] text-black" : "bg-white/10 text-white"}`}>
           YES {odds.yesOdds}%
@@ -117,7 +137,7 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
           {odds.source === "ai" ? "AI initial view until bets set pool odds" : "Neutral opening view until bets set pool odds"}
         </p>
       )}
-      <label className="mt-5 block text-xs font-black uppercase tracking-[0.2em] text-white/45">Amount USDC</label>
+      <label className="mt-5 block text-xs font-black uppercase tracking-[0.2em] text-white/45">Amount {currency}</label>
       <input
         value={amount}
         onChange={(event) => setAmount(event.target.value)}
@@ -125,9 +145,9 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
         className="mt-2 w-full border border-white/10 bg-black px-4 py-3 text-lg text-white outline-none focus:border-[#f5a623]"
         placeholder="0.00"
       />
-      <p className="mt-3 text-sm text-white/55">Estimated payout if correct: USDC {formatUsdc(estimated)}</p>
+      <p className="mt-3 text-sm text-white/55">Estimated payout if correct: {currencySymbol}{formatUsdc(estimated)} {currency}</p>
       <button disabled={loading || switchingChain || market.resolved} onClick={placeBet} className="mt-5 w-full bg-[#f5a623] px-4 py-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">
-        {switchingChain ? "Switching to Arc..." : loading ? "Processing..." : market.resolved ? "Market resolved" : `Bet ${side ? "YES" : "NO"}`}
+        {switchingChain ? "Switching to Arc..." : loading ? "Processing..." : market.resolved ? "Market resolved" : `Bet ${side ? "YES" : "NO"} with ${currency}`}
       </button>
       {market.resolved ? (
         <button disabled={claiming || switchingChain} onClick={claimWinnings} className="mt-3 w-full bg-[#2d6a4f] px-4 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">

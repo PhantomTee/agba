@@ -23,8 +23,14 @@ create table if not exists markets (
   news_item_id uuid references news_items(id),
   resolution_criteria text,
   groq_yes_probability numeric check (groq_yes_probability >= 1 and groq_yes_probability <= 99),
+  initial_probability_yes integer default 50,
   yes_pool numeric default 0,
   no_pool numeric default 0,
+  eurc_yes_pool numeric default 0,
+  eurc_no_pool numeric default 0,
+  usyc_invested boolean default false,
+  yield_earned numeric default 0,
+  agent_seeded boolean default false,
   created_at timestamptz default now(),
   resolves_at timestamptz,
   resolved boolean default false,
@@ -38,6 +44,7 @@ create table if not exists bets (
   wallet_address text not null,
   side boolean not null,
   amount_usdc numeric not null,
+  currency text default 'USDC',
   tx_hash text unique,
   created_at timestamptz default now()
 );
@@ -63,3 +70,11 @@ create index if not exists pending_resolution_status_created_idx on pending_reso
 alter publication supabase_realtime add table markets;
 alter publication supabase_realtime add table bets;
 alter publication supabase_realtime add table news_items;
+
+alter table bets add column if not exists currency text default 'USDC';
+alter table markets add column if not exists eurc_yes_pool numeric default 0;
+alter table markets add column if not exists eurc_no_pool numeric default 0;
+alter table markets add column if not exists usyc_invested boolean default false;
+alter table markets add column if not exists yield_earned numeric default 0;
+alter table markets add column if not exists initial_probability_yes integer default 50;
+alter table markets add column if not exists agent_seeded boolean default false;

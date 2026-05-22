@@ -13,6 +13,7 @@ export async function POST(request: NextRequest) {
     const marketId = Number(body.marketId);
     const side = Boolean(body.side);
     const amount = Number(body.amount);
+    const currency = normalizeCurrency(body.currency);
     const txHash = String(body.txHash || "");
     const walletAddress = String(body.walletAddress || "");
     if (!Number.isInteger(marketId) || amount <= 0 || !txHash || !walletAddress) {
@@ -28,6 +29,7 @@ export async function POST(request: NextRequest) {
     }
     const contract = getReadOnlyMarketContract();
     const expectedAmount = parseUnits(String(amount), 6);
+    const betEventName = currency === "EURC" ? "EURCBet" : "Bet";
     const betEvent = receipt.logs
       .map((log) => {
         try {
@@ -36,9 +38,9 @@ export async function POST(request: NextRequest) {
           return null;
         }
       })
-      .find((event) => event?.name === "Bet");
+      .find((event) => event?.name === betEventName);
     if (!betEvent) {
-      return safeJson({ error: "Transaction did not emit an Agba Bet event" }, { status: 400 });
+      return safeJson({ error: `Transaction did not emit an Agba ${betEventName} event` }, { status: 400 });
     }
     const eventMarketId = Number(betEvent.args.marketId);
     const eventBettor = String(betEvent.args.bettor);
@@ -52,28 +54,60 @@ export async function POST(request: NextRequest) {
     ) {
       return safeJson({ error: "Bet transaction details do not match the request" }, { status: 400 });
     }
-    const onchain = await contract.getMarket(marketId);
+    const [onchain, eurcPools] = await Promise.all([
+      contract.getMarket(marketId),
+      contract.getEURCPools(marketId),
+    ]);
     const yesPool = Number(formatUnits(onchain.yesPool, 6));
     const noPool = Number(formatUnits(onchain.noPool, 6));
+    const eurcYesPool = Number(formatUnits(eurcPools.yesPool, 6));
+    const eurcNoPool = Number(formatUnits(eurcPools.noPool, 6));
     const supabase = getSupabaseAdmin();
-    const { error: betError } = await supabase.from("bets").insert({
+    const betPayload = {
       market_id: marketId,
       wallet_address: walletAddress,
       side,
       amount_usdc: amount,
+      currency,
       tx_hash: txHash,
-    });
-    if (betError && betError.code !== "23505") throw betError;
-    const { error: marketError } = await supabase.from("markets").update({ yes_pool: yesPool, no_pool: noPool }).eq("id", marketId);
-    if (marketError) throw marketError;
+    };
+    const { error: betError } = await supabase.from("bets").insert(betPayload);
+    let betRecorded = !betError || betError.code === "23505";
+    if (betError && isMissingColumnError(betError, "currency")) {
+      const { currency: _unusedCurrency, ...legacyBetPayload } = betPayload;
+      const { error: legacyBetError } = await supabase.from("bets").insert(legacyBetPayload);
+      if (legacyBetError && legacyBetError.code !== "23505") throw legacyBetError;
+      betRecorded = true;
+    }
+    if (!betRecorded && betError) throw betError;
+    const { error: marketError } = await supabase
+      .from("markets")
+      .update({ yes_pool: yesPool, no_pool: noPool, eurc_yes_pool: eurcYesPool, eurc_no_pool: eurcNoPool })
+      .eq("id", marketId);
+    if (marketError && isMissingColumnError(marketError, "eurc_yes_pool")) {
+      const { error: legacyMarketError } = await supabase.from("markets").update({ yes_pool: yesPool, no_pool: noPool }).eq("id", marketId);
+      if (legacyMarketError) throw legacyMarketError;
+    } else if (marketError) {
+      throw marketError;
+    }
     const total = yesPool + noPool;
     return safeJson({
       success: true,
       newYesPool: yesPool,
       newNoPool: noPool,
+      newEURCYesPool: eurcYesPool,
+      newEURCNoPool: eurcNoPool,
       impliedOdds: total > 0 ? { yes: yesPool / total, no: noPool / total } : { yes: 0.5, no: 0.5 },
     });
   } catch (error) {
     return safeJson({ error: error instanceof Error ? error.message : "Unable to record bet" }, { status: 500 });
   }
+}
+
+function normalizeCurrency(input: unknown): "USDC" | "EURC" {
+  return String(input || "USDC").toUpperCase() === "EURC" ? "EURC" : "USDC";
+}
+
+function isMissingColumnError(error: { code?: string; message?: string }, column: string) {
+  return error.code === "PGRST204" || Boolean(error.message?.includes(column) && error.message.toLowerCase().includes("column"));
 }

@@ -20,14 +20,24 @@ export async function GET(request: NextRequest) {
     const contract = getReadOnlyMarketContract();
     const enriched = await Promise.all(
       markets.map(async (market) => {
-        const onchain = await contract.getMarket(market.id);
-        const userBets = wallet ? await contract.getUserBets(market.id, wallet) : null;
+        const [onchain, eurcPools, userBets, userEURCBets] = await Promise.all([
+          contract.getMarket(market.id),
+          contract.getEURCPools(market.id),
+          wallet ? contract.getUserBets(market.id, wallet) : null,
+          wallet ? contract.getUserEURCBets(market.id, wallet) : null,
+        ]);
         return {
           ...market,
           yes_pool: Number(formatUnits(onchain.yesPool, 6)),
           no_pool: Number(formatUnits(onchain.noPool, 6)),
+          eurc_yes_pool: Number(formatUnits(eurcPools.yesPool, 6)),
+          eurc_no_pool: Number(formatUnits(eurcPools.noPool, 6)),
+          initial_probability_yes: Number(onchain.initialProbabilityYes ?? market.initial_probability_yes ?? 50),
           userBets: userBets
             ? { yes: formatUnits(userBets.yes, 6), no: formatUnits(userBets.no, 6) }
+            : undefined,
+          userEURCBets: userEURCBets
+            ? { yes: formatUnits(userEURCBets.yes, 6), no: formatUnits(userEURCBets.no, 6) }
             : undefined,
         };
       }),
