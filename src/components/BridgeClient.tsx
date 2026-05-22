@@ -5,18 +5,10 @@ import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 import { useState } from "react";
 import type { EIP1193Provider } from "viem";
 import { useAccount } from "wagmi";
+import { useUsdcBalances, type UsdcBalance } from "@/hooks/useUsdcBalances";
+import { USDC_NETWORKS, chainLabel } from "@/lib/usdcNetworks";
 
-const BRIDGE_CHAINS = [
-  "Ethereum_Sepolia",
-  "Base_Sepolia",
-  "Arbitrum_Sepolia",
-  "Optimism_Sepolia",
-  "Arc_Testnet",
-];
-
-function chainLabel(raw: string) {
-  return raw.replace(/_/g, " ");
-}
+const BRIDGE_CHAINS = USDC_NETWORKS.map((network) => network.bridgeId);
 
 function shortAddr(addr: string) {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
@@ -56,6 +48,7 @@ function stepIdx(s: BridgeStep) { return STEP_ORDER.indexOf(s); }
 // ── Component ─────────────────────────────────────────────────────────────────
 export function BridgeClient() {
   const { address, isConnected } = useAccount();
+  const { balancesByBridgeId, loading: balancesLoading, refreshing: balancesRefreshing, refetch: refetchBalances } = useUsdcBalances(address, isConnected);
   const [fromChain, setFromChain] = useState("Base_Sepolia");
   const [toChain,   setToChain]   = useState("Arc_Testnet");
   const [amount,    setAmount]    = useState("");
@@ -66,6 +59,8 @@ export function BridgeClient() {
   const [bridgeStep,  setBridgeStep]  = useState<BridgeStep>("idle");
   const [bridgeResult, setBridgeResult] = useState<BridgeResult | null>(null);
   const [error,       setError]       = useState("");
+  const fromBalance = balancesByBridgeId.get(fromChain);
+  const toBalance = balancesByBridgeId.get(toChain);
 
   // ── helpers ────────────────────────────────────────────────────────────────
   function getRawProvider(): EIP1193Provider {
@@ -210,6 +205,23 @@ export function BridgeClient() {
           </label>
         </div>
 
+        <div className="grid grid-cols-2 gap-4">
+          <BalanceTile
+            title="From balance"
+            chain={fromChain}
+            balance={fromBalance}
+            loading={balancesLoading}
+            connected={isConnected}
+          />
+          <BalanceTile
+            title="To balance"
+            chain={toChain}
+            balance={toBalance}
+            loading={balancesLoading}
+            connected={isConnected}
+          />
+        </div>
+
         <label className="block">
           <span className="text-xs font-black uppercase tracking-[0.2em] text-white/45">USDC amount</span>
           <div className="relative mt-2">
@@ -233,6 +245,15 @@ export function BridgeClient() {
         >
           {loading ? "Estimating…" : "Estimate bridge fees →"}
         </button>
+        {isConnected && (
+          <button
+            onClick={() => refetchBalances(false)}
+            disabled={balancesRefreshing}
+            className="w-full border border-white/15 px-5 py-3 text-xs font-black uppercase tracking-[0.15em] text-white/60 transition-colors hover:border-[#f5a623] hover:text-[#f5a623] disabled:opacity-50"
+          >
+            {balancesRefreshing ? "Refreshing balances..." : "Refresh balances"}
+          </button>
+        )}
       </div>
 
       {/* Error / info */}
@@ -425,6 +446,29 @@ export function BridgeClient() {
       </p>
     </main>
   );
+}
+
+function BalanceTile({ title, chain, balance, loading, connected }: { title: string; chain: string; balance?: UsdcBalance; loading: boolean; connected: boolean }) {
+  return (
+    <div className="border border-white/10 bg-white/[0.03] p-4">
+      <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/35">{title}</p>
+      <p className="mt-1 text-xs font-bold text-white/45">{chainLabel(chain)}</p>
+      <p className="mt-3 text-2xl font-black text-white">
+        {!connected ? "Connect wallet" : loading ? "..." : formatBalance(balance?.balance || "0")}
+        {connected && <span className="text-sm text-[#f5a623]"> USDC</span>}
+      </p>
+      {balance?.status === "error" && <p className="mt-2 text-xs text-red-200">Balance unavailable</p>}
+    </div>
+  );
+}
+
+function formatBalance(value: string) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return value;
+  return numeric.toLocaleString("en-US", {
+    maximumFractionDigits: 6,
+    minimumFractionDigits: numeric > 0 && numeric < 1 ? 2 : 0,
+  });
 }
 
 function resultStepToUiStep(stepName: string | undefined): BridgeStep {
