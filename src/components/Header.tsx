@@ -1,19 +1,18 @@
 "use client";
 
-import { ConnectKitButton } from "connectkit";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useConnect, useDisconnect } from "wagmi";
 import { publicConfig } from "@/lib/env";
 import { ThemeToggle } from "./ThemeToggle";
 
 const NAV_LINKS = [
-  { href: "/markets", label: "Markets" },
-  { href: "/agent", label: "Agent" },
+  { href: "/markets",     label: "Markets" },
+  { href: "/agent",       label: "Agent" },
   { href: "/leaderboard", label: "Leaderboard" },
-  { href: "/bridge", label: "Bridge" },
-  { href: "/about", label: "About" },
+  { href: "/bridge",      label: "Bridge" },
+  { href: "/about",       label: "About" },
 ];
 
 export function Header() {
@@ -22,7 +21,7 @@ export function Header() {
   const [open, setOpen] = useState(false);
 
   const config = publicConfig();
-  const walletConfigured = Boolean(config.arcRpc && config.arcChainId && process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID);
+  const walletConfigured = Boolean(config.arcRpc && config.arcChainId);
   const isAdmin = address?.toLowerCase() === process.env.NEXT_PUBLIC_ADMIN_WALLET?.toLowerCase();
 
   const links = [...NAV_LINKS, ...(isAdmin ? [{ href: "/admin", label: "Admin" }] : [])];
@@ -56,7 +55,7 @@ export function Header() {
             <ThemeToggle />
             <div className="hidden md:block">
               {walletConfigured ? (
-                <ConnectKitButton />
+                <WalletButton />
               ) : (
                 <span className="border border-white/10 px-3 py-2 text-xs font-bold text-white/45">Wallet env missing</span>
               )}
@@ -115,7 +114,7 @@ export function Header() {
           {/* Wallet at bottom */}
           <div className="border-t border-white/10 px-4 py-6">
             {walletConfigured ? (
-              <ConnectKitButton />
+              <WalletButton fullWidth />
             ) : (
               <span className="text-sm text-white/45">Wallet env missing</span>
             )}
@@ -123,5 +122,71 @@ export function Header() {
         </div>
       )}
     </>
+  );
+}
+
+// ── Injected wallet button ────────────────────────────────────────────────────
+function WalletButton({ fullWidth = false }: { fullWidth?: boolean }) {
+  const { address, isConnected } = useAccount();
+  const { connect, connectors, isPending } = useConnect();
+  const { disconnect } = useDisconnect();
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [connectError, setConnectError] = useState("");
+
+  const injectedConnector = connectors.find((c) => c.type === "injected");
+
+  async function handleConnect() {
+    setConnectError("");
+    if (!injectedConnector) {
+      setConnectError("No injected wallet found. Install MetaMask.");
+      return;
+    }
+    try {
+      connect({ connector: injectedConnector });
+    } catch (err) {
+      setConnectError(err instanceof Error ? err.message : "Connection failed");
+    }
+  }
+
+  if (!isConnected) {
+    return (
+      <div className={fullWidth ? "w-full" : undefined}>
+        <button
+          onClick={handleConnect}
+          disabled={isPending}
+          className={`bg-[#f5a623] px-4 py-2 text-sm font-black text-black transition-opacity hover:opacity-90 disabled:opacity-50 ${fullWidth ? "w-full" : ""}`}
+        >
+          {isPending ? "Connecting…" : "Connect Wallet"}
+        </button>
+        {connectError && (
+          <p className="mt-2 text-xs text-red-300">{connectError}</p>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative ${fullWidth ? "w-full" : ""}`}>
+      <button
+        onClick={() => setMenuOpen((v) => !v)}
+        className={`border border-white/20 px-3 py-2 font-mono text-xs font-bold text-white transition-colors hover:border-[#f5a623] hover:text-[#f5a623] ${fullWidth ? "w-full text-left" : ""}`}
+      >
+        {address?.slice(0, 6)}…{address?.slice(-4)}
+      </button>
+      {menuOpen && (
+        <>
+          {/* Click-away backdrop */}
+          <div className="fixed inset-0 z-40" onClick={() => setMenuOpen(false)} />
+          <div className={`absolute z-50 mt-1 border border-white/10 bg-black py-1 shadow-lg ${fullWidth ? "w-full" : "right-0 w-40"}`}>
+            <button
+              onClick={() => { disconnect(); setMenuOpen(false); }}
+              className="w-full px-4 py-2 text-left text-sm text-red-300 hover:bg-white/5"
+            >
+              Disconnect
+            </button>
+          </div>
+        </>
+      )}
+    </div>
   );
 }

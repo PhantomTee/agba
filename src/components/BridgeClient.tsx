@@ -4,7 +4,7 @@ import { BridgeKit, type BridgeChainIdentifier, type BridgeResult } from "@circl
 import { createViemAdapterFromProvider } from "@circle-fin/adapter-viem-v2";
 import { useState } from "react";
 import type { EIP1193Provider } from "viem";
-import { useAccount, useWalletClient } from "wagmi";
+import { useAccount } from "wagmi";
 
 const BRIDGE_CHAINS = [
   "Ethereum_Sepolia",
@@ -40,76 +40,135 @@ type BridgeEstimate = {
   fees?: ProviderFee[];
 };
 
-const STEP_ICONS: Record<string, string> = {
-  Approve: "1",
-  Burn: "2",
-  Mint: "3",
-};
+// ── CCTP step tracking ────────────────────────────────────────────────────────
+type BridgeStep = "idle" | "approve" | "burn" | "attest" | "mint" | "done";
 
+const STEPS: Array<{ id: BridgeStep; label: string; desc: string }> = [
+  { id: "approve", label: "Approve",  desc: "Allow USDC spending on source chain" },
+  { id: "burn",    label: "Burn",     desc: "Lock USDC — wallet popup" },
+  { id: "attest",  label: "Attest",   desc: "Circle signs the transfer (~2 min)" },
+  { id: "mint",    label: "Mint",     desc: "Receive USDC on Arc" },
+];
+
+const STEP_ORDER: BridgeStep[] = ["idle", "approve", "burn", "attest", "mint", "done"];
+function stepIdx(s: BridgeStep) { return STEP_ORDER.indexOf(s); }
+
+// ── Component ─────────────────────────────────────────────────────────────────
 export function BridgeClient() {
   const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
   const [fromChain, setFromChain] = useState("Base_Sepolia");
-  const [toChain, setToChain] = useState("Arc_Testnet");
-  const [amount, setAmount] = useState("");
-  const [estimate, setEstimate] = useState<BridgeEstimate | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [bridging, setBridging] = useState(false);
-  const [bridgeStatus, setBridgeStatus] = useState("");
-  const [error, setError] = useState("");
+  const [toChain,   setToChain]   = useState("Arc_Testnet");
+  const [amount,    setAmount]    = useState("");
 
-  async function getBrowserBridgeParams() {
-    if (!isConnected || !address) throw new Error("Connect a wallet before bridging.");
-    if (!walletClient) throw new Error("Wallet client not ready. Try reconnecting your wallet.");
-    if (!amount || Number(amount) <= 0) throw new Error("Enter a positive USDC amount.");
-    const adapter = await createViemAdapterFromProvider({
-      provider: walletClient.transport as unknown as EIP1193Provider,
-    });
+  const [estimate,    setEstimate]    = useState<BridgeEstimate | null>(null);
+  const [loading,     setLoading]     = useState(false);
+  const [bridging,    setBridging]    = useState(false);
+  const [bridgeStep,  setBridgeStep]  = useState<BridgeStep>("idle");
+  const [bridgeResult, setBridgeResult] = useState<BridgeResult | null>(null);
+  const [error,       setError]       = useState("");
+
+  // ── helpers ────────────────────────────────────────────────────────────────
+  function getRawProvider(): EIP1193Provider {
+    const eth = (window as { ethereum?: EIP1193Provider }).ethereum;
+    if (!eth) throw new Error(
+      "No browser wallet detected. Install MetaMask (or another injected wallet) to bridge — WalletConnect alone cannot switch chains for CCTP."
+    );
+    return eth;
+  }
+
+  async function getBridgeParams() {
+    if (!isConnected || !address) throw new Error("Connect your wallet before bridging.");
+    if (!amount || Number(amount) <= 0)  throw new Error("Enter a positive USDC amount.");
+    // Use window.ethereum so BridgeKit can switch chains via wallet_switchEthereumChain.
+    // walletClient.transport is chain-locked to Arc Testnet and cannot sign on other chains.
+    const adapter = await createViemAdapterFromProvider({ provider: getRawProvider() });
     return {
-      from: { adapter, chain: fromChain as BridgeChainIdentifier },
-      to: { adapter, chain: toChain as BridgeChainIdentifier },
+      from:   { adapter, chain: fromChain as BridgeChainIdentifier },
+      to:     { adapter, chain: toChain   as BridgeChainIdentifier, useForwarder: toChain === "Arc_Testnet" },
       amount,
-      token: "USDC" as const,
+      token:  "USDC" as const,
     };
   }
 
+  // ── estimate ───────────────────────────────────────────────────────────────
   async function estimateBridge() {
     setLoading(true);
     setError("");
-    setBridgeStatus("");
     setEstimate(null);
+    setBridgeStep("idle");
+    setBridgeResult(null);
     try {
       const kit = new BridgeKit({ disableErrorReporting: true });
-      const nextEstimate = await kit.estimate(await getBrowserBridgeParams());
-      setEstimate(nextEstimate as unknown as BridgeEstimate);
+      const next = await kit.estimate(await getBridgeParams());
+      setEstimate(next as unknown as BridgeEstimate);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to estimate bridge transfer");
+      setError(err instanceof Error ? err.message : "Unable to estimate bridge fees");
     } finally {
       setLoading(false);
     }
   }
 
+  // ── execute ────────────────────────────────────────────────────────────────
   async function executeBridge() {
     setBridging(true);
     setError("");
-    setBridgeStatus("Preparing bridge transaction...");
+    setBridgeStep("approve");
     try {
       const kit = new BridgeKit({ disableErrorReporting: true });
+
+      // Map BridgeKit events → step labels so the progress bar updates in real time
       kit.on("*", (payload) => {
-        if (payload && typeof payload === "object" && "method" in payload) {
-          setBridgeStatus(`Bridge step: ${String(payload.method)}`);
-        }
+        if (!payload || typeof payload !== "object" || !("method" in payload)) return;
+        const m = String((payload as { method: unknown }).method).toLowerCase();
+        if      (m.includes("approve"))                       setBridgeStep("approve");
+        else if (m.includes("burn") || m.includes("deposit")) setBridgeStep("burn");
+        else if (m.includes("attest") || m.includes("wait"))  setBridgeStep("attest");
+        else if (m.includes("mint")  || m.includes("receive"))setBridgeStep("mint");
       });
-      const result = (await kit.bridge(await getBrowserBridgeParams())) as BridgeResult;
-      setBridgeStatus(result.state === "success" ? "Bridge completed." : "Bridge submitted. Check the transaction steps for status.");
+
+      handleBridgeResult((await kit.bridge(await getBridgeParams())) as BridgeResult);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to execute bridge transfer");
-      setBridgeStatus("");
+      setBridgeStep("idle");
+      setError(err instanceof Error ? err.message : "Bridge failed");
     } finally {
       setBridging(false);
     }
   }
 
+  async function retryBridge() {
+    if (!bridgeResult) return;
+    setBridging(true);
+    setError("");
+    try {
+      const kit = new BridgeKit({ disableErrorReporting: true });
+      const adapter = await createViemAdapterFromProvider({ provider: getRawProvider() });
+      handleBridgeResult(await kit.retry(bridgeResult, { from: adapter, to: adapter }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Bridge retry failed");
+    } finally {
+      setBridging(false);
+    }
+  }
+
+  function handleBridgeResult(result: BridgeResult) {
+    setBridgeResult(result);
+    const failedStep = result.steps.find((step) => step.state === "error");
+    const pendingStep = result.steps.find((step) => step.state === "pending");
+    if (result.state === "success") {
+      setBridgeStep("done");
+      setError("");
+      return;
+    }
+    if (result.state === "error") {
+      setBridgeStep(resultStepToUiStep(failedStep?.name));
+      setError(failedStep?.errorMessage || "Bridge failed before the transfer completed. Retry the bridge step after checking your wallet.");
+      return;
+    }
+    setBridgeStep(resultStepToUiStep(pendingStep?.name));
+    setError("Bridge is still processing. Retry status after Circle confirms the remaining step.");
+  }
+
+  // ── render ─────────────────────────────────────────────────────────────────
   return (
     <main className="mx-auto max-w-2xl px-4 py-12">
       {/* Header */}
@@ -118,7 +177,7 @@ export function BridgeClient() {
         Bridge USDC<br />to Arc.
       </h1>
       <p className="mt-4 text-sm text-white/50">
-        Move USDC cross-chain via Circle's native burn-and-mint protocol. No wrapping, no slippage.
+        Move USDC cross-chain via Circle&apos;s native burn-and-mint protocol. No wrapping, no slippage.
       </p>
 
       {/* Form */}
@@ -128,7 +187,7 @@ export function BridgeClient() {
             <span className="text-xs font-black uppercase tracking-[0.2em] text-white/45">From</span>
             <select
               value={fromChain}
-              onChange={(e) => setFromChain(e.target.value)}
+              onChange={(e) => { setFromChain(e.target.value); setEstimate(null); setBridgeStep("idle"); setBridgeResult(null); }}
               className="mt-2 w-full bg-black border border-white/10 px-3 py-3 text-sm text-white focus:border-[#f5a623] focus:outline-none"
             >
               {BRIDGE_CHAINS.map((c) => (
@@ -141,7 +200,7 @@ export function BridgeClient() {
             <span className="text-xs font-black uppercase tracking-[0.2em] text-white/45">To</span>
             <select
               value={toChain}
-              onChange={(e) => setToChain(e.target.value)}
+              onChange={(e) => { setToChain(e.target.value); setEstimate(null); setBridgeStep("idle"); setBridgeResult(null); }}
               className="mt-2 w-full bg-black border border-white/10 px-3 py-3 text-sm text-white focus:border-[#f5a623] focus:outline-none"
             >
               {BRIDGE_CHAINS.map((c) => (
@@ -156,7 +215,7 @@ export function BridgeClient() {
           <div className="relative mt-2">
             <input
               value={amount}
-              onChange={(e) => setAmount(e.target.value)}
+              onChange={(e) => { setAmount(e.target.value); setEstimate(null); setBridgeStep("idle"); setBridgeResult(null); }}
               placeholder="0.00"
               inputMode="decimal"
               className="w-full bg-black border border-white/10 px-3 py-3 pr-16 text-sm text-white placeholder:text-white/25 focus:border-[#f5a623] focus:outline-none"
@@ -176,10 +235,10 @@ export function BridgeClient() {
         </button>
       </div>
 
-      {/* Error */}
+      {/* Error / info */}
       {error && (
-        <div className="mt-6 border border-red-500/40 bg-red-500/5 px-4 py-3">
-          <p className="text-sm text-red-200">{error}</p>
+        <div className="mt-6 border border-[#f5a623]/30 bg-[#f5a623]/5 px-4 py-3">
+          <p className="text-sm text-[#f5a623]">{error}</p>
         </div>
       )}
 
@@ -191,7 +250,6 @@ export function BridgeClient() {
           <div className="border border-white/10 p-5">
             <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-4">Route</p>
             <div className="flex items-center gap-3">
-              {/* Source */}
               <div className="flex-1 min-w-0">
                 <p className="text-xs text-white/40 mb-1">From</p>
                 <p className="text-sm font-bold text-white truncate">
@@ -203,11 +261,7 @@ export function BridgeClient() {
                   </p>
                 )}
               </div>
-
-              {/* Arrow */}
               <div className="shrink-0 text-[#f5a623] text-lg">→</div>
-
-              {/* Destination */}
               <div className="flex-1 min-w-0 text-right">
                 <p className="text-xs text-white/40 mb-1">To</p>
                 <p className="text-sm font-bold text-white truncate">
@@ -220,8 +274,6 @@ export function BridgeClient() {
                 )}
               </div>
             </div>
-
-            {/* Amount being bridged */}
             <div className="mt-4 border-t border-white/10 pt-4 flex items-center justify-between">
               <span className="text-xs text-white/40 uppercase tracking-[0.15em]">Amount</span>
               <span className="text-lg font-black text-white">
@@ -245,18 +297,13 @@ export function BridgeClient() {
                       i < estimate.gasFees!.length - 1 ? "border-b border-white/[0.06]" : ""
                     }`}
                   >
-                    {/* Step number */}
                     <div className="shrink-0 w-6 h-6 rounded-full border border-white/20 flex items-center justify-center text-[10px] font-black text-white/50">
-                      {STEP_ICONS[step.name] ?? i + 1}
+                      {i + 1}
                     </div>
-
-                    {/* Step name + chain */}
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-bold text-white">{step.name}</p>
                       <p className="text-xs text-white/35">{chainLabel(step.blockchain)}</p>
                     </div>
-
-                    {/* Fee */}
                     <div className="text-right shrink-0">
                       <p className="text-sm font-bold text-white">
                         {step.fees ? Number(step.fees.fee).toFixed(6) : "0.000000"}
@@ -269,30 +316,25 @@ export function BridgeClient() {
             </div>
           )}
 
-          {/* Provider fees */}
+          {/* Protocol fees */}
           {estimate.fees && estimate.fees.length > 0 && (
             <div className="border border-white/10 p-5">
               <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-4">
                 Protocol fees
               </p>
-              <div className="space-y-0">
-                {estimate.fees.map((fee, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center justify-between py-2"
-                  >
-                    <span className="text-sm text-white/60 capitalize">{fee.type} fee</span>
-                    <span className="text-sm font-bold text-white">
-                      {fee.amount}{" "}
-                      <span className="text-white/50 font-normal">{fee.token}</span>
-                    </span>
-                  </div>
-                ))}
-              </div>
+              {estimate.fees.map((fee, i) => (
+                <div key={i} className="flex items-center justify-between py-2">
+                  <span className="text-sm text-white/60 capitalize">{fee.type} fee</span>
+                  <span className="text-sm font-bold text-white">
+                    {fee.amount}{" "}
+                    <span className="text-white/50 font-normal">{fee.token}</span>
+                  </span>
+                </div>
+              ))}
             </div>
           )}
 
-          {/* You receive estimate */}
+          {/* Estimated received */}
           {estimate.amount && estimate.fees && (
             <div className="border border-[#f5a623]/30 bg-[#f5a623]/5 p-5 flex items-center justify-between">
               <div>
@@ -311,14 +353,62 @@ export function BridgeClient() {
             </div>
           )}
 
-          <button
-            onClick={executeBridge}
-            disabled={bridging}
-            className="w-full bg-[#2d6a4f] px-5 py-4 text-sm font-black uppercase tracking-[0.15em] text-white transition-opacity disabled:opacity-40 hover:opacity-90"
-          >
-            {bridging ? "Bridging..." : "Bridge USDC"}
-          </button>
-          {bridgeStatus && <p className="text-sm text-[#f5a623]">{bridgeStatus}</p>}
+          {/* Bridge button */}
+          {bridgeStep === "done" ? (
+            <div className="border border-[#2d6a4f] bg-[#2d6a4f]/20 px-5 py-4 text-center">
+              <p className="text-sm font-black text-white">✓ Bridge complete — USDC arrived on Arc.</p>
+            </div>
+          ) : (
+            <button
+              onClick={executeBridge}
+              disabled={bridging}
+              className="w-full bg-[#2d6a4f] px-5 py-4 text-sm font-black uppercase tracking-[0.15em] text-white transition-opacity disabled:opacity-60 hover:opacity-90"
+            >
+              {bridging ? "Bridging…" : "Bridge USDC"}
+            </button>
+          )}
+
+          {bridgeResult && bridgeResult.state !== "success" && (
+            <button
+              onClick={retryBridge}
+              disabled={bridging}
+              className="w-full border border-white/15 px-5 py-3 text-sm font-black uppercase tracking-[0.15em] text-white transition-colors hover:border-[#f5a623] hover:text-[#f5a623] disabled:opacity-60"
+            >
+              {bridging ? "Checking bridge..." : "Retry bridge status"}
+            </button>
+          )}
+
+          {/* Step-by-step progress */}
+          {bridgeStep !== "idle" && bridgeStep !== "done" && (
+            <div className="border border-white/10 p-5">
+              <p className="text-xs font-black uppercase tracking-[0.2em] text-white/40 mb-4">
+                Bridge progress
+              </p>
+              <div className="space-y-3">
+                {STEPS.map(({ id, label, desc }) => {
+                  const done   = stepIdx(id) < stepIdx(bridgeStep);
+                  const active = id === bridgeStep;
+                  return (
+                    <div key={id} className="flex items-start gap-3">
+                      <div className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-black transition-colors ${
+                        done   ? "bg-[#2d6a4f] text-white"       :
+                        active ? "bg-[#f5a623] text-black"        :
+                                 "border border-white/20 text-white/30"
+                      }`}>
+                        {done ? "✓" : active ? "…" : "○"}
+                      </div>
+                      <div className="min-w-0">
+                        <p className={`text-sm font-bold ${active ? "text-[#f5a623]" : done ? "text-white/60" : "text-white/25"}`}>
+                          {label}
+                        </p>
+                        <p className={`text-xs ${active ? "text-white/55" : "text-white/25"}`}>{desc}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -328,6 +418,19 @@ export function BridgeClient() {
           Select chains, enter an amount, and click estimate to see gas costs and timing.
         </p>
       )}
+
+      {/* Wallet note */}
+      <p className="mt-8 text-xs text-white/20">
+        CCTP bridging requires an injected wallet (MetaMask or similar) that supports chain switching. WalletConnect alone is not supported.
+      </p>
     </main>
   );
+}
+
+function resultStepToUiStep(stepName: string | undefined): BridgeStep {
+  const name = stepName?.toLowerCase() || "";
+  if (name.includes("approve")) return "approve";
+  if (name.includes("burn") || name.includes("deposit")) return "burn";
+  if (name.includes("mint") || name.includes("receive")) return "mint";
+  return "attest";
 }

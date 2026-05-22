@@ -1,16 +1,20 @@
 "use client";
 
-import { BrowserProvider, Contract, MaxUint256, parseUnits, type Eip1193Provider } from "ethers";
+import { BrowserProvider, Contract, JsonRpcSigner, MaxUint256, parseUnits } from "ethers";
+import Link from "next/link";
 import { useState } from "react";
-import { useAccount, useWalletClient } from "wagmi";
+import type { Account, Chain, Client, Transport } from "viem";
+import { useAccount, useConnectorClient, useSwitchChain } from "wagmi";
 import { ERC20_ABI, MARKET_ABI } from "@/lib/constants";
 import { publicConfig } from "@/lib/env";
 import { calculateOdds, formatUsdc } from "@/lib/odds";
 import type { Market } from "@/lib/types";
 
-export function BetPanel({ market, initialSide = true }: { market: Market; initialSide?: boolean }) {
-  const { address, isConnected } = useAccount();
-  const { data: walletClient } = useWalletClient();
+export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: Market; initialSide?: boolean; onBetPlaced?: () => void }) {
+  const { address, chainId, isConnected } = useAccount();
+  const walletConfig = publicConfig();
+  const { data: connectorClient, refetch: refetchConnectorClient } = useConnectorClient({ chainId: walletConfig.arcChainId || undefined });
+  const { isPending: switchingChain, switchChainAsync } = useSwitchChain();
   const [amount, setAmount] = useState("");
   const [side, setSide] = useState<boolean>(initialSide);
   const [status, setStatus] = useState("");
@@ -37,14 +41,10 @@ export function BetPanel({ market, initialSide = true }: { market: Market; initi
       setError("Enter a valid USDC amount.");
       return;
     }
-    if (!walletClient) {
-      setError("Wallet client not ready. Try reconnecting your wallet.");
-      return;
-    }
     setLoading(true);
     try {
-      const provider = new BrowserProvider(walletClient as unknown as Eip1193Provider);
-      const signer = await provider.getSigner();
+      const signer = await getArcSigner(config);
+      if (!signer) return;
       const amountUnits = parseUnits(amount, 6);
       const usdc = new Contract(config.usdcAddress, ERC20_ABI, signer);
       const marketContract = new Contract(config.contractAddress, MARKET_ABI, signer);
@@ -66,6 +66,7 @@ export function BetPanel({ market, initialSide = true }: { market: Market; initi
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || "Bet transaction succeeded but recording failed");
       setStatus("Bet recorded.");
+      onBetPlaced?.();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Bet failed");
     } finally {
@@ -85,14 +86,10 @@ export function BetPanel({ market, initialSide = true }: { market: Market; initi
       setError("Contract address must be configured in environment variables.");
       return;
     }
-    if (!walletClient) {
-      setError("Wallet client not ready. Try reconnecting your wallet.");
-      return;
-    }
     setClaiming(true);
     try {
-      const provider = new BrowserProvider(walletClient as unknown as Eip1193Provider);
-      const signer = await provider.getSigner();
+      const signer = await getArcSigner(config);
+      if (!signer) return;
       const marketContract = new Contract(config.contractAddress, MARKET_ABI, signer);
       setStatus("Claiming winnings on Arc...");
       const tx = await marketContract.claimWinnings(market.id);
@@ -124,26 +121,46 @@ export function BetPanel({ market, initialSide = true }: { market: Market; initi
         placeholder="0.00"
       />
       <p className="mt-3 text-sm text-white/55">Estimated payout if correct: USDC {formatUsdc(estimated)}</p>
-      <button disabled={loading || market.resolved} onClick={placeBet} className="mt-5 w-full bg-[#f5a623] px-4 py-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">
-        {loading ? "Processing..." : market.resolved ? "Market resolved" : `Bet ${side ? "YES" : "NO"}`}
+      <button disabled={loading || switchingChain || market.resolved} onClick={placeBet} className="mt-5 w-full bg-[#f5a623] px-4 py-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">
+        {switchingChain ? "Switching to Arc..." : loading ? "Processing..." : market.resolved ? "Market resolved" : `Bet ${side ? "YES" : "NO"}`}
       </button>
       {market.resolved ? (
-        <button disabled={claiming} onClick={claimWinnings} className="mt-3 w-full bg-[#2d6a4f] px-4 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
-          {claiming ? "Claiming..." : "Claim winnings"}
+        <button disabled={claiming || switchingChain} onClick={claimWinnings} className="mt-3 w-full bg-[#2d6a4f] px-4 py-4 text-sm font-black text-white disabled:cursor-not-allowed disabled:opacity-50">
+          {switchingChain ? "Switching to Arc..." : claiming ? "Claiming..." : "Claim winnings"}
         </button>
       ) : null}
-      <a
-        href="https://developers.circle.com/stablecoins/docs/cctp-getting-started"
-        target="_blank"
-        rel="noreferrer"
+      <Link
+        href="/bridge"
         className="mt-3 block border border-white/10 px-4 py-3 text-center text-xs font-bold text-white/70 hover:text-white"
       >
         Bridge USDC to Arc
-      </a>
+      </Link>
       {status && <p className="mt-3 text-sm text-[#f5a623]">{status}</p>}
       {error && <p className="mt-3 text-sm text-red-200">{error}</p>}
     </div>
   );
+
+  async function getArcSigner(config: ReturnType<typeof publicConfig>) {
+    if (!config.arcChainId) {
+      setError("Arc chain ID must be configured in environment variables.");
+      return null;
+    }
+    if (chainId !== config.arcChainId) {
+      setStatus("Switching wallet to Arc...");
+      try {
+        await switchChainAsync({ chainId: config.arcChainId });
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Switch to Arc failed");
+        return null;
+      }
+    }
+    const nextConnectorClient = connectorClient ?? (await refetchConnectorClient()).data;
+    if (!nextConnectorClient) {
+      setError("Arc wallet signer is not ready. Confirm the wallet is connected to Arc and try again.");
+      return null;
+    }
+    return clientToSigner(nextConnectorClient);
+  }
 }
 
 function estimatePayout(amount: number, side: boolean, yesPool: number, noPool: number) {
@@ -152,4 +169,14 @@ function estimatePayout(amount: number, side: boolean, yesPool: number, noPool: 
   const losingPool = side ? noPool : yesPool;
   if (winningPool <= 0) return amount;
   return amount + (amount / winningPool) * losingPool * 0.985;
+}
+
+function clientToSigner(client: Client<Transport, Chain, Account>) {
+  const { account, chain, transport } = client;
+  const network = {
+    chainId: chain.id,
+    name: chain.name,
+    ensAddress: chain.contracts?.ensRegistry?.address,
+  };
+  return new JsonRpcSigner(new BrowserProvider(transport, network), account.address);
 }

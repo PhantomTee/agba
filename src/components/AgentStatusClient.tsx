@@ -66,12 +66,24 @@ export function AgentStatusClient() {
         </div>
         <div className="border border-white/10 p-5">
           <h2 className="font-display text-2xl font-black text-[#f5a623]">Categories</h2>
-          <svg viewBox="0 0 120 120" className="mt-4 aspect-square w-full">
-            <circle cx="60" cy="60" r="48" fill="none" stroke="#ffffff22" strokeWidth="18" />
-            {Object.entries(stats.marketsByCategory).map(([category, count], index) => (
-              <circle key={category} cx="60" cy="60" r={36 + index * 3} fill="none" stroke="#f5a623" strokeWidth="2" strokeDasharray={`${count * 10} 360`} />
-            ))}
-          </svg>
+          {Object.keys(stats.marketsByCategory).length === 0 ? (
+            <p className="mt-4 text-sm text-white/50">No markets yet.</p>
+          ) : (
+            <>
+              <DonutChart data={stats.marketsByCategory} />
+              <div className="mt-4 space-y-2">
+                {Object.entries(stats.marketsByCategory).map(([cat, count]) => (
+                  <div key={cat} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: CATEGORY_COLORS[cat] ?? "#6b7280" }} />
+                      <span className="text-xs font-bold text-white/70">{cat}</span>
+                    </div>
+                    <span className="text-xs text-white/45 tabular-nums">{count}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
       </section>
       <section className="mt-10 border border-white/10 p-5">
@@ -98,5 +110,62 @@ function Metric({ label, value }: { label: string; value: string }) {
       <div className="text-xs font-black uppercase tracking-[0.2em] text-white/40">{label}</div>
       <div className="mt-2 text-2xl font-black text-white">{value}</div>
     </div>
+  );
+}
+
+const CATEGORY_COLORS: Record<string, string> = {
+  FOREX:       "#f5a623",
+  POLITICS:    "#e63946",
+  SPORTS:      "#2d9d57",
+  ECONOMY:     "#457b9d",
+  SECURITY:    "#9c4dc1",
+  COMMODITIES: "#f4a261",
+  TECH:        "#2a9d8f",
+  OTHER:       "#6b7280",
+};
+
+function DonutChart({ data }: { data: Record<string, number> }) {
+  const entries = Object.entries(data);
+  const total = entries.reduce((s, [, v]) => s + v, 0);
+  if (total === 0) return null;
+
+  const r = 42;
+  const circ = 2 * Math.PI * r;
+
+  // Pre-compute each segment's start angle (degrees, 0 = 12 o'clock = -90 from SVG default)
+  const segs = entries.map(([cat, count], i) => {
+    const prevCount = entries.slice(0, i).reduce((s, [, v]) => s + v, 0);
+    return {
+      cat,
+      arc: (count / total) * circ,
+      angle: (prevCount / total) * 360 - 90,
+    };
+  });
+
+  return (
+    <svg viewBox="0 0 120 120" className="mt-4 w-full max-w-[180px] mx-auto">
+      {segs.map(({ cat, arc, angle }) => (
+        <circle
+          key={cat}
+          cx="60"
+          cy="60"
+          r={r}
+          fill="none"
+          stroke={CATEGORY_COLORS[cat] ?? "#6b7280"}
+          strokeWidth="16"
+          strokeDasharray={`${arc} ${circ}`}
+          transform={`rotate(${angle} 60 60)`}
+        />
+      ))}
+      {/* inner fill to create donut hole */}
+      <circle cx="60" cy="60" r="34" fill="black" />
+      {/* centre label */}
+      <text x="60" y="56" textAnchor="middle" fill="white" fontSize="14" fontWeight="bold" fontFamily="sans-serif">
+        {total}
+      </text>
+      <text x="60" y="70" textAnchor="middle" fill="rgba(255,255,255,0.4)" fontSize="8" fontFamily="sans-serif">
+        markets
+      </text>
+    </svg>
   );
 }

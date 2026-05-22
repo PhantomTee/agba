@@ -29,6 +29,17 @@ export function MarketDetailClient({ id }: { id: string }) {
       .finally(() => setLoading(false));
   }, [id]);
 
+  function refreshBets() {
+    fetch(`/api/markets/${id}`)
+      .then(async (response) => {
+        if (!response.ok) return;
+        const data = await response.json();
+        setBets(data.bets ?? []);
+        if (data.market) setMarket(data.market);
+      })
+      .catch(() => {/* silent refresh — don't overwrite a working page with an error */});
+  }
+
   if (loading) return <main className="mx-auto max-w-7xl px-4 py-12 text-white/55">Loading market...</main>;
   if (error) return <main className="mx-auto max-w-7xl px-4 py-12 text-red-200">{error}</main>;
   if (!market) return <main className="mx-auto max-w-7xl px-4 py-12 text-white/55">Market not found.</main>;
@@ -52,35 +63,31 @@ export function MarketDetailClient({ id }: { id: string }) {
         <div className="mt-10">
           <h2 className="font-display text-3xl font-black text-white">Bet history</h2>
           {bets.length === 0 ? (
-            <p className="mt-4 text-white/50">No bets yet.</p>
+            <p className="mt-4 text-white/50">No bets yet — be the first.</p>
           ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="w-full border-collapse text-left text-sm">
-                <thead className="text-white/45">
-                  <tr>
-                    <th className="border-b border-white/10 py-3">Wallet</th>
-                    <th className="border-b border-white/10 py-3">Side</th>
-                    <th className="border-b border-white/10 py-3">Amount</th>
-                    <th className="border-b border-white/10 py-3">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bets.map((bet) => (
-                    <tr key={bet.id}>
-                      <td className="border-b border-white/10 py-3 text-white/70">{bet.wallet_address}</td>
-                      <td className="border-b border-white/10 py-3 font-bold text-white">{bet.side ? "YES" : "NO"}</td>
-                      <td className="border-b border-white/10 py-3 text-white/70">USDC {formatUsdc(bet.amount_usdc)}</td>
-                      <td className="border-b border-white/10 py-3 text-white/45">{new Date(bet.created_at).toLocaleString()}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="mt-4 space-y-0">
+              {bets.map((bet) => (
+                <div key={bet.id} className="flex items-center justify-between border-b border-white/10 py-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className={`shrink-0 px-2 py-0.5 text-xs font-black ${bet.side ? "bg-[#f5a623] text-black" : "bg-[#2d6a4f] text-white"}`}>
+                      {bet.side ? "YES" : "NO"}
+                    </span>
+                    <span className="font-mono text-xs text-white/50 truncate">
+                      {bet.wallet_address.slice(0, 6)}…{bet.wallet_address.slice(-4)}
+                    </span>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <span className="text-sm font-bold text-white">USDC {formatUsdc(bet.amount_usdc)}</span>
+                    <p className="text-xs text-white/35">{new Date(bet.created_at).toLocaleString()}</p>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
       </section>
       <aside className="space-y-8">
-        <BetPanel market={market} initialSide={initialSide} />
+        <BetPanel market={market} initialSide={initialSide} onBetPlaced={refreshBets} />
         <div className="border border-white/10 p-5">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#f5a623]">Why Àgbà made this market</h2>
           <p className="mt-3 text-sm leading-relaxed text-white/65">{market.news_items?.groq_reasoning || "No agent reasoning recorded."}</p>
