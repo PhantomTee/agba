@@ -32,7 +32,7 @@ export function MarketCard({ market }: { market: Market }) {
           "Source article unavailable"
         )}
       </div>
-      <div className="mt-5 overflow-hidden border border-white/10 bg-white/5">
+      <div className="mt-5 overflow-hidden border border-white/10 bg-[#2d6a4f]">
         <div className="h-3 bg-[#f5a623]" style={{ width: `${odds.yesOdds}%` }} />
       </div>
       {odds.source !== "pool" && (
