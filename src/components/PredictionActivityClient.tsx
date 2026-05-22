@@ -71,7 +71,7 @@ export function PredictionActivityClient() {
               </div>
               <div className="text-left md:text-right">
                 <p className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Stake</p>
-                <p className="mt-1 text-xl font-black text-white">USDC {formatUsdc(prediction.amount_usdc)}</p>
+                <p className="mt-1 text-xl font-black text-white"> {formatUsdc(prediction.amount_usdc)} USDC</p>
                 {prediction.markets && (
                   <Link href={`/market/${prediction.market_id}`} className="mt-2 inline-block text-sm font-bold text-[#f5a623] hover:underline">
                     View market
