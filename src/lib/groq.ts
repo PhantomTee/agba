@@ -78,7 +78,7 @@ REJECT (suitable: false) ONLY when:
 - Absolutely no plausible resolution date within 30 days.
 
 Output ONLY valid JSON - no markdown, no backticks, no commentary:
-When suitable is true, estimate the chance that the generated question resolves YES as initialProbabilityYes from 0 to 100. Estimate probability (0-100) this resolves YES from news context, history, and base rates. If uncertain use 40-60. If strong signal use 65-80. Never use exactly 50 unless truly no information. Also mirror this value as yesProbability for backward compatibility.
+When suitable is true, estimate the chance that the generated question resolves YES as initialProbabilityYes from 5 to 95. Estimate probability this resolves YES from news context, history, and base rates. If uncertain use 40-60. If strong signal use 65-80. Never use exactly 50 unless truly no information. Never output 0 or 100. Also mirror this value as yesProbability for backward compatibility.
 
 Output ONLY valid JSON - no markdown, no backticks, no commentary:
 {"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string,"initialProbabilityYes":number,"yesProbability":number|null}`,
@@ -125,5 +125,5 @@ function normalizeYesProbability(value: unknown) {
 function normalizeInitialProbability(value: unknown) {
   const probability = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(probability)) return 50;
-  return Math.min(100, Math.max(0, Math.round(probability)));
+  return Math.min(95, Math.max(5, Math.round(probability)));
 }

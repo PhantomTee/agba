@@ -26,5 +26,5 @@ export function timeRemaining(iso: string | null) {
 
 function normalizeInitialOdds(initialYesProbability?: number | null) {
   if (initialYesProbability == null || !Number.isFinite(initialYesProbability)) return 50;
-  return Math.min(100, Math.max(0, Math.round(initialYesProbability)));
+  return Math.min(95, Math.max(5, Math.round(initialYesProbability)));
 }

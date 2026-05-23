@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
         continue;
       }
       const contract = getMarketContract();
+      await assertCompatibleMarketContract(contract);
       const tx = await contract["createMarket(string,string,string,string,string,uint256,uint256)"](
         decision.question,
         decision.category,
@@ -213,6 +214,16 @@ async function seedMarketLiquidity(contract: ReturnType<typeof getMarketContract
     return { seeded: true, yesPool, noPool, totalPool: yesPool + noPool };
   } catch {
     return { seeded: false, yesPool: 0, noPool: 0, totalPool: 0 };
+  }
+}
+
+async function assertCompatibleMarketContract(contract: ReturnType<typeof getMarketContract>) {
+  try {
+    await contract.eurcToken();
+  } catch {
+    throw new Error(
+      `Configured NEXT_PUBLIC_CONTRACT_ADDRESS does not support the EURC/USYC market ABI. Update it to the latest deployed AgbaMarket address before scanning.`,
+    );
   }
 }
 
