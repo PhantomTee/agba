@@ -4,7 +4,6 @@ import { getArcProvider, getReadOnlyMarketContract, getReadOnlyUsdcContract } fr
 import { ERC20_ABI } from "@/lib/constants";
 import { getEnv } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase";
-import { YieldOpsControls } from "@/components/YieldOpsControls";
 
 export const metadata: Metadata = {
   title: "USYC Yield Operations",
@@ -34,8 +33,8 @@ export default async function YieldPage() {
         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#f5a623]">Treasury operations</p>
         <h1 className="mt-2 font-display text-5xl font-black leading-none text-white md:text-7xl">USYC Yield</h1>
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white/55">
-          This page tracks USDC locked in open prediction markets and the portion that can be moved into USYC while the market waits for resolution.
-          USYC redemptions should happen before payout, so investment actions must remain owner/admin controlled.
+          This page tracks USDC locked in open prediction markets and the portion the AI agent can move into USYC while the market waits for resolution.
+          The agent invests market-scoped idle USDC automatically, and resolution redeems USYC before winner payouts.
         </p>
       </div>
 
@@ -72,7 +71,22 @@ export default async function YieldPage() {
         </div>
 
         <aside className="space-y-4">
-          <YieldOpsControls markets={state.markets.map(({ id, question, eligibleIdle }) => ({ id, question, eligibleIdle }))} />
+          <div className="border border-white/10 p-5">
+            <h2 className="font-display text-2xl font-black text-[#f5a623]">Agent automation</h2>
+            <p className="mt-3 text-sm leading-relaxed text-white/60">
+              The GitHub cron calls the agent USYC sweep every 15 minutes. The agent checks open markets, skips resolved or empty pools, and invests eligible idle USDC above the configured threshold.
+            </p>
+            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Min idle</p>
+                <p className="mt-1 font-black text-white">${state.minIdleUsdc}</p>
+              </div>
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Sweep cadence</p>
+                <p className="mt-1 font-black text-white">15 min</p>
+              </div>
+            </div>
+          </div>
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Integration model</h2>
             <p className="mt-3 text-sm leading-relaxed text-white/60">
@@ -81,12 +95,12 @@ export default async function YieldPage() {
             </p>
           </div>
           <div className="border border-white/10 p-5">
-            <h2 className="font-display text-2xl font-black text-[#f5a623]">Controls to add next</h2>
+            <h2 className="font-display text-2xl font-black text-[#f5a623]">Guardrails</h2>
             <ul className="mt-3 space-y-2 text-sm text-white/60">
-              <li>Admin action to invest a selected market&apos;s idle USDC.</li>
-              <li>Minimum idle threshold and reserve ratio per market.</li>
-              <li>Resolution guard that redeems USYC before claims open.</li>
-              <li>Audit log for every invest/redeem transaction.</li>
+              <li>Only market-locked USDC is eligible.</li>
+              <li>Each market is tracked by principal, so later bets can be swept separately.</li>
+              <li>Resolved markets are skipped.</li>
+              <li>Resolution redeems a market&apos;s USYC before winners claim.</li>
             </ul>
           </div>
           <div className="border border-white/10 p-5 text-sm text-white/50">
@@ -145,6 +159,7 @@ async function fetchYieldState() {
   return {
     contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
     contractUsyc: Number(formatUnits(contractUsycRaw, 6)),
+    minIdleUsdc: process.env.AGENT_USYC_MIN_IDLE_USDC || "1",
     totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
     totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
     markets: currentMarkets,

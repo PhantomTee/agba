@@ -8,13 +8,18 @@ on:
 
 jobs:
   scan:
-    name: Agent scan
+    name: Agent scan and yield
     if: github.event_name == 'workflow_dispatch' || (github.event_name == 'schedule' && contains(github.event.schedule, '*/15'))
     runs-on: ubuntu-latest
     steps:
       - name: Trigger scan
         run: |
           curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/scan" \
+            -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"
+      - name: Trigger USYC sweep
+        run: |
+          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/yield" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
 
