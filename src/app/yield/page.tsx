@@ -4,6 +4,7 @@ import { getArcProvider, getReadOnlyMarketContract, getReadOnlyUsdcContract } fr
 import { ERC20_ABI } from "@/lib/constants";
 import { getEnv } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { YieldOpsControls } from "@/components/YieldOpsControls";
 
 export const metadata: Metadata = {
   title: "USYC Yield Operations",
@@ -71,6 +72,7 @@ export default async function YieldPage() {
         </div>
 
         <aside className="space-y-4">
+          <YieldOpsControls markets={state.markets.map(({ id, question, eligibleIdle }) => ({ id, question, eligibleIdle }))} />
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Integration model</h2>
             <p className="mt-3 text-sm leading-relaxed text-white/60">
