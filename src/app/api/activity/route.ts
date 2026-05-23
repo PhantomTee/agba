@@ -17,12 +17,16 @@ export async function GET(request: NextRequest) {
     const limit = normalizeLimit(request.nextUrl.searchParams.get("limit"));
     const wallet = normalizeWallet(request.nextUrl.searchParams.get("wallet"));
     const supabase = getSupabaseAdmin();
+    const contract = getReadOnlyMarketContract();
+    const currentMarketCount = Number(await contract.marketCount());
+    if (currentMarketCount === 0) return safeJson({ predictions: [] });
 
     let query = supabase
       .from("bets")
       .select("id,market_id,wallet_address,side,amount_usdc,currency,tx_hash,created_at,markets(id,question,category,country,resolved,outcome)")
+      .lte("market_id", currentMarketCount)
       .order("created_at", { ascending: false })
-      .limit(limit);
+      .limit(limit * 5);
     if (wallet) query = query.ilike("wallet_address", wallet);
 
     const { data, error } = await query;
@@ -33,7 +37,8 @@ export async function GET(request: NextRequest) {
       markets: Array.isArray(prediction.markets) ? prediction.markets[0] || null : prediction.markets,
     })) as PredictionActivity[];
     const chainPredictions = wallet ? await fetchWalletChainPredictions(wallet, limit) : [];
-    return safeJson({ predictions: mergeActivity(databasePredictions, chainPredictions).slice(0, limit) });
+    const hydrated = await hydrateMarkets(mergeActivity(databasePredictions, chainPredictions), contract);
+    return safeJson({ predictions: hydrated.slice(0, limit) });
   } catch (error) {
     return safeJson({ error: error instanceof Error ? error.message : "Unable to fetch prediction activity" }, { status: 500 });
   }
@@ -88,25 +93,46 @@ async function fetchWalletChainPredictions(wallet: string, limit: number): Promi
     .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
     .slice(0, limit);
 
-  return hydrateMarkets(bets);
+  return hydrateMarkets(bets, contract);
 }
 
-async function hydrateMarkets(predictions: PredictionActivity[]): Promise<PredictionActivity[]> {
+async function hydrateMarkets(
+  predictions: PredictionActivity[],
+  contract = getReadOnlyMarketContract(),
+): Promise<PredictionActivity[]> {
   const marketIds = [...new Set(predictions.map((prediction) => prediction.market_id))];
   if (marketIds.length === 0) return predictions;
 
-  const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase
-    .from("markets")
-    .select("id,question,category,country,resolved,outcome")
-    .in("id", marketIds);
-  if (error) throw error;
+  const markets = new Map<number, ActivityMarket & { created_at: string }>();
+  await Promise.all(
+    marketIds.map(async (marketId) => {
+      const onchain = await contract.getMarket(marketId);
+      if (Number(onchain.id) === 0) return;
+      markets.set(marketId, {
+        id: Number(onchain.id),
+        question: onchain.question,
+        category: onchain.category,
+        country: onchain.sourceCountry,
+        resolved: onchain.resolved,
+        outcome: onchain.resolved ? onchain.outcome : null,
+        created_at: new Date(Number(onchain.createdAt) * 1000).toISOString(),
+      });
+    }),
+  );
 
-  const markets = new Map<number, ActivityMarket>((data || []).map((market) => [Number(market.id), market as ActivityMarket]));
-  return predictions.map((prediction) => ({
-    ...prediction,
-    markets: markets.get(Number(prediction.market_id)) || null,
-  }));
+  const currentPredictions: PredictionActivity[] = [];
+  for (const prediction of predictions) {
+    const market = markets.get(Number(prediction.market_id));
+    if (!market) continue;
+    if (new Date(prediction.created_at).getTime() < new Date(market.created_at).getTime()) continue;
+    const { created_at: _createdAt, ...activityMarket } = market;
+    currentPredictions.push({
+      ...prediction,
+      markets: activityMarket,
+    });
+  }
+
+  return currentPredictions;
 }
 
 function isBetEvent(log: Log | EventLog): log is EventLog {
