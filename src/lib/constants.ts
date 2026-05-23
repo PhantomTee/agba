@@ -69,6 +69,7 @@ export const MARKET_ABI = [
   "function getUserEURCBets(uint256 marketId,address user) view returns (uint256 yes,uint256 no)",
   "function getMarketUSYCBalance(uint256 marketId) view returns (uint256)",
   "function getMarketYieldEarned(uint256 marketId) view returns (uint256)",
+  "function marketUsycPrincipal(uint256 marketId) view returns (uint256)",
   "function getOpenMarkets() view returns (uint256[])",
   "function getMarketsByCategory(string category) view returns (uint256[])",
   "function marketCount() view returns (uint256)",

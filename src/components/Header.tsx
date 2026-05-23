@@ -11,6 +11,8 @@ const NAV_LINKS = [
   { href: "/markets",     label: "Markets" },
   { href: "/activity",    label: "Activity" },
   { href: "/agent",       label: "Agent" },
+  { href: "/agent/activity", label: "AI Log" },
+  { href: "/yield",       label: "Yield" },
   { href: "/leaderboard", label: "Leaderboard" },
   { href: "/bridge",      label: "Bridge" },
   { href: "/me",          label: "Me" },

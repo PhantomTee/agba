@@ -31,9 +31,7 @@ export async function GET(request: NextRequest) {
             wallet ? contract.getUserEURCBets(market.id, wallet) : null,
           ]);
 
-          if (Number(onchain.id) === 0) {
-            return market;
-          }
+          if (Number(onchain.id) === 0) return null;
 
           return {
             ...market,
@@ -73,12 +71,12 @@ export async function GET(request: NextRequest) {
               : undefined,
           };
         } catch {
-          return market;
+          return null;
         }
       }),
     );
 
-    return safeJson({ markets: enriched });
+    return safeJson({ markets: enriched.filter((market) => market !== null) });
   } catch (error) {
     return safeJson(
       {
