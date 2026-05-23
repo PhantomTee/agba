@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
   let articlesAnalyzed = 0;
   let marketsCreated = 0;
   let rejected = 0;
+  let lastError = "";
   const feedResults = await Promise.allSettled(
     NEWS_SOURCES.map(async (source) => {
       try {
@@ -181,14 +182,23 @@ export async function POST(request: NextRequest) {
       marketsCreated += 1;
     } catch (error) {
       rejected += 1;
+      lastError = error instanceof Error ? error.message : "Agent scan failed";
       const { error: reasonError } = await supabase
         .from("news_items")
-        .update({ groq_reasoning: error instanceof Error ? error.message : "Agent scan failed" })
+        .update({ groq_reasoning: lastError })
         .eq("id", inserted.id);
       if (reasonError) throw reasonError;
     }
   }
-  return safeJson({ articlesScanned, articlesAnalyzed, marketsCreated, rejected, timedOut: isNearScanDeadline(scanStartedAt) });
+  return safeJson({
+    articlesScanned,
+    articlesAnalyzed,
+    marketsCreated,
+    rejected,
+    timedOut: isNearScanDeadline(scanStartedAt),
+    contractAddress: getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS"),
+    lastError,
+  });
 }
 
 function isMissingColumnError(error: { code?: string; message?: string }, column: string) {
@@ -245,9 +255,10 @@ async function seedMarketLiquidity(contract: ReturnType<typeof getMarketContract
 async function assertCompatibleMarketContract(contract: ReturnType<typeof getMarketContract>) {
   try {
     await contract.eurcToken();
-  } catch {
+  } catch (error) {
+    const detail = error instanceof Error && error.message ? ` (${error.message})` : "";
     throw new Error(
-      `Configured NEXT_PUBLIC_CONTRACT_ADDRESS does not support the EURC/USYC market ABI. Update it to the latest deployed AgbaMarket address before scanning.`,
+      `Configured NEXT_PUBLIC_CONTRACT_ADDRESS does not support the EURC/USYC market ABI. Update it to the latest deployed AgbaMarket address before scanning.${detail}`,
     );
   }
 }
