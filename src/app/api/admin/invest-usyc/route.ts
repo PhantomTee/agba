@@ -10,6 +10,11 @@ export const dynamic = "force-dynamic";
 export async function POST(request: NextRequest) {
   try {
     assertAdminRequest(request);
+  } catch (error) {
+    return safeJson({ error: error instanceof Error ? error.message : "Unauthorized admin request" }, { status: 401 });
+  }
+
+  try {
     const body = await request.json();
     const marketId = Number(body.marketId);
     const amount = Number(body.amountUsdc);
