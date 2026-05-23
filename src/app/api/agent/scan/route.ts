@@ -83,18 +83,19 @@ export async function POST(request: NextRequest) {
         rejected += 1;
         continue;
       }
-      const { data: openMarkets, error: openError } = await supabase
-        .from("markets")
-        .select("question")
-        .eq("resolved", false);
+      const contract = getMarketContract();
+      await assertCompatibleMarketContract(contract);
+      const [{ data: openMarkets, error: openError }, currentMarketCount] = await Promise.all([
+        supabase.from("markets").select("id,question").eq("resolved", false),
+        contract.marketCount().then((count: bigint) => Number(count)),
+      ]);
       if (openError) throw openError;
-      const tooSimilar = (openMarkets || []).some((market) => keywordOverlapRatio(decision.question, market.question) > 0.5);
+      const currentOpenMarkets = (openMarkets || []).filter((market) => Number(market.id) <= currentMarketCount);
+      const tooSimilar = currentOpenMarkets.some((market) => keywordOverlapRatio(decision.question, market.question) > 0.5);
       if (tooSimilar) {
         rejected += 1;
         continue;
       }
-      const contract = getMarketContract();
-      await assertCompatibleMarketContract(contract);
       const tx = await contract["createMarket(string,string,string,string,string,uint256,uint256)"](
         decision.question,
         decision.category,
@@ -130,10 +131,10 @@ export async function POST(request: NextRequest) {
         initial_probability_yes: decision.initialProbabilityYes,
         resolves_at: resolvesAt,
       };
-      const { error: marketError } = await supabase.from("markets").insert(marketPayload);
+      const { error: marketError } = await supabase.from("markets").upsert(marketPayload, { onConflict: "id" });
       if (marketError && isMissingOptionalMarketColumnError(marketError)) {
         const { groq_yes_probability: _unusedGroq, initial_probability_yes: _unusedInitial, ...legacyMarketPayload } = marketPayload;
-        const { error: legacyMarketError } = await supabase.from("markets").insert(legacyMarketPayload);
+        const { error: legacyMarketError } = await supabase.from("markets").upsert(legacyMarketPayload, { onConflict: "id" });
         if (legacyMarketError) throw legacyMarketError;
       } else if (marketError) {
         throw marketError;

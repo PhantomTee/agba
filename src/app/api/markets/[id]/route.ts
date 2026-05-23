@@ -24,6 +24,9 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       contract.getMarketUSYCBalance(id),
       contract.getMarketYieldEarned(id),
     ]);
+    if (Number(onchain.id) === 0) {
+      return safeJson({ error: "Market not found on current contract" }, { status: 404 });
+    }
     const chainTotal = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
     const recordedTotal = databaseBets.reduce((total, bet) => total + Number(bet.amount_usdc || 0), 0);
     const chainBets = chainTotal > recordedTotal ? await fetchChainBets(id) : [];
@@ -35,9 +38,25 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
       .order("created_at", { ascending: false })
       .limit(5);
     if (relatedError) throw relatedError;
+    const currentRelated = await enrichCurrentContractMarkets(contract, related || []);
     return safeJson({
       market: {
         ...market,
+        question: onchain.question,
+        category: onchain.category,
+        country: onchain.sourceCountry,
+        created_at: new Date(Number(onchain.createdAt) * 1000).toISOString(),
+        resolves_at: new Date(Number(onchain.resolvesAt) * 1000).toISOString(),
+        resolved: onchain.resolved,
+        outcome: onchain.resolved ? onchain.outcome : null,
+        news_items: market.news_items
+          ? {
+              ...market.news_items,
+              headline: onchain.newsHeadline,
+              url: onchain.newsUrl,
+              country: onchain.sourceCountry,
+            }
+          : market.news_items,
         yes_pool: Number(formatUnits(onchain.yesPool, 6)),
         no_pool: Number(formatUnits(onchain.noPool, 6)),
         eurc_yes_pool: Number(formatUnits(eurcPools.yesPool, 6)),
@@ -47,11 +66,38 @@ export async function GET(_: NextRequest, { params }: { params: { id: string } }
         yield_earned: Number(formatUnits(yieldEarned, 6)),
       },
       bets: mergeBetHistory(databaseBets, chainBets),
-      related: related || [],
+      related: currentRelated,
     });
   } catch (error) {
     return safeJson({ error: error instanceof Error ? error.message : "Unable to fetch market" }, { status: 500 });
   }
+}
+
+async function enrichCurrentContractMarkets(contract: ReturnType<typeof getReadOnlyMarketContract>, markets: Array<Record<string, unknown>>) {
+  const enriched = await Promise.all(
+    markets.map(async (market) => {
+      const marketId = Number(market.id);
+      const [onchain, eurcPools] = await Promise.all([contract.getMarket(marketId), contract.getEURCPools(marketId)]);
+      if (Number(onchain.id) === 0) return null;
+      return {
+        ...market,
+        question: onchain.question,
+        category: onchain.category,
+        country: onchain.sourceCountry,
+        created_at: new Date(Number(onchain.createdAt) * 1000).toISOString(),
+        resolves_at: new Date(Number(onchain.resolvesAt) * 1000).toISOString(),
+        resolved: onchain.resolved,
+        outcome: onchain.resolved ? onchain.outcome : null,
+        yes_pool: Number(formatUnits(onchain.yesPool, 6)),
+        no_pool: Number(formatUnits(onchain.noPool, 6)),
+        eurc_yes_pool: Number(formatUnits(eurcPools.yesPool, 6)),
+        eurc_no_pool: Number(formatUnits(eurcPools.noPool, 6)),
+        initial_probability_yes: Number(onchain.initialProbabilityYes ?? market.initial_probability_yes ?? 50),
+      };
+    }),
+  );
+
+  return enriched.filter((market) => market !== null);
 }
 
 async function fetchDatabaseBets(marketId: number) {

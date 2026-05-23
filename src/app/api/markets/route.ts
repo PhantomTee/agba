@@ -26,8 +26,24 @@ export async function GET(request: NextRequest) {
           wallet ? contract.getUserBets(market.id, wallet) : null,
           wallet ? contract.getUserEURCBets(market.id, wallet) : null,
         ]);
+        if (Number(onchain.id) === 0) return null;
         return {
           ...market,
+          question: onchain.question,
+          category: onchain.category,
+          country: onchain.sourceCountry,
+          created_at: new Date(Number(onchain.createdAt) * 1000).toISOString(),
+          resolves_at: new Date(Number(onchain.resolvesAt) * 1000).toISOString(),
+          resolved: onchain.resolved,
+          outcome: onchain.resolved ? onchain.outcome : null,
+          news_items: market.news_items
+            ? {
+                ...market.news_items,
+                headline: onchain.newsHeadline,
+                url: onchain.newsUrl,
+                country: onchain.sourceCountry,
+              }
+            : market.news_items,
           yes_pool: Number(formatUnits(onchain.yesPool, 6)),
           no_pool: Number(formatUnits(onchain.noPool, 6)),
           eurc_yes_pool: Number(formatUnits(eurcPools.yesPool, 6)),
@@ -42,7 +58,7 @@ export async function GET(request: NextRequest) {
         };
       }),
     );
-    return safeJson({ markets: enriched });
+    return safeJson({ markets: enriched.filter((market) => market !== null) });
   } catch (error) {
     return safeJson({ error: error instanceof Error ? error.message : "Unable to fetch markets" }, { status: 500 });
   }

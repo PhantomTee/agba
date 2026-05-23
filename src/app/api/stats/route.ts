@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { getReadOnlyMarketContract } from "@/lib/chain";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -6,13 +7,17 @@ export const dynamic = "force-dynamic";
 export async function GET() {
   try {
     const supabase = getSupabaseAdmin();
-    const [{ data: markets, error: marketsError }, { count: articlesScanned, error: newsError }] = await Promise.all([
-      supabase.from("markets").select("category,country,yes_pool,no_pool,resolved"),
+    const [{ data: markets, error: marketsError }, { count: articlesScanned, error: newsError }, marketCount] = await Promise.all([
+      supabase.from("markets").select("id,category,country,yes_pool,no_pool,resolved"),
       supabase.from("news_items").select("*", { count: "exact", head: true }),
+      getReadOnlyMarketContract()
+        .marketCount()
+        .then((count) => Number(count))
+        .catch(() => null),
     ]);
     if (marketsError) throw marketsError;
     if (newsError) throw newsError;
-    const marketRows = markets || [];
+    const marketRows = (markets || []).filter((market) => marketCount === null || Number(market.id) <= marketCount);
     const totalVolumeUSDC = marketRows.reduce((sum, market) => sum + Number(market.yes_pool || 0) + Number(market.no_pool || 0), 0);
     const marketsByCategory = Object.fromEntries(
       [...new Set(marketRows.map((market) => market.category).filter(Boolean))].map((category) => [
