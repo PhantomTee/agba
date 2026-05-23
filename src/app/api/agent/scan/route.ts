@@ -15,6 +15,12 @@ export const maxDuration = 60;
 
 type FeedItem = Parser.Item & { sourceName: string; country: string };
 
+const RSS_TIMEOUT_MS = 4_000;
+const SCAN_TIME_BUDGET_MS = 48_000;
+const GROQ_ANALYSIS_TIMEOUT_MS = 12_000;
+const MAX_ARTICLES_ANALYZED_PER_RUN = 8;
+const MAX_MARKETS_PER_RUN = 2;
+
 export async function POST(request: NextRequest) {
   try {
     assertCronRequest(request);
@@ -22,11 +28,11 @@ export async function POST(request: NextRequest) {
     return safeJson({ error: error instanceof Error ? error.message : "Unauthorized cron request" }, { status: 401 });
   }
   const supabase = getSupabaseAdmin();
+  const scanStartedAt = Date.now();
 
-  const parser = new Parser();
-  // Cap market creation at 3 per run so we stay well within the 60-second limit.
-  const MAX_MARKETS_PER_RUN = 3;
+  const parser = new Parser({ timeout: RSS_TIMEOUT_MS });
   let articlesScanned = 0;
+  let articlesAnalyzed = 0;
   let marketsCreated = 0;
   let rejected = 0;
   const feedResults = await Promise.allSettled(
@@ -42,6 +48,7 @@ export async function POST(request: NextRequest) {
   const items = feedResults.flatMap((result) => (result.status === "fulfilled" ? result.value : []));
 
   for (const item of items) {
+    if (marketsCreated >= MAX_MARKETS_PER_RUN || articlesAnalyzed >= MAX_ARTICLES_ANALYZED_PER_RUN || isNearScanDeadline(scanStartedAt)) break;
     const url = item.link || item.guid;
     if (!url || !item.title) continue;
     const { data: inserted, error: insertError } = await supabase
@@ -62,12 +69,17 @@ export async function POST(request: NextRequest) {
     }
     articlesScanned += 1;
     try {
-      const decision = await analyzeNewsForMarket({
-        headline: item.title,
-        description: item.contentSnippet || item.content || "",
-        sourceName: item.sourceName,
-        publishDate: item.isoDate || item.pubDate || new Date().toISOString(),
-      });
+      articlesAnalyzed += 1;
+      const decision = await withTimeout(
+        analyzeNewsForMarket({
+          headline: item.title,
+          description: item.contentSnippet || item.content || "",
+          sourceName: item.sourceName,
+          publishDate: item.isoDate || item.pubDate || new Date().toISOString(),
+        }),
+        GROQ_ANALYSIS_TIMEOUT_MS,
+        "Groq analysis timed out",
+      );
       const { error: updateError } = await supabase
         .from("news_items")
         .update({
@@ -167,7 +179,6 @@ export async function POST(request: NextRequest) {
         payload: { marketId, question: decision.question, category: decision.category, country: item.country },
       });
       marketsCreated += 1;
-      if (marketsCreated >= MAX_MARKETS_PER_RUN) break;
     } catch (error) {
       rejected += 1;
       const { error: reasonError } = await supabase
@@ -177,7 +188,7 @@ export async function POST(request: NextRequest) {
       if (reasonError) throw reasonError;
     }
   }
-  return safeJson({ articlesScanned, marketsCreated, rejected });
+  return safeJson({ articlesScanned, articlesAnalyzed, marketsCreated, rejected, timedOut: isNearScanDeadline(scanStartedAt) });
 }
 
 function isMissingColumnError(error: { code?: string; message?: string }, column: string) {
@@ -186,6 +197,19 @@ function isMissingColumnError(error: { code?: string; message?: string }, column
 
 function isMissingOptionalMarketColumnError(error: { code?: string; message?: string }) {
   return ["groq_yes_probability", "initial_probability_yes", "agent_seeded", "usyc_invested"].some((column) => isMissingColumnError(error, column));
+}
+
+function isNearScanDeadline(startedAt: number) {
+  return Date.now() - startedAt > SCAN_TIME_BUDGET_MS;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string) {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(message)), timeoutMs);
+    }),
+  ]);
 }
 
 async function seedMarketLiquidity(contract: ReturnType<typeof getMarketContract>, marketId: number, probability: number) {

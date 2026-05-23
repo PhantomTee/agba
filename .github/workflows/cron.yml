@@ -14,7 +14,7 @@ jobs:
     steps:
       - name: Trigger scan
         run: |
-          curl -f -X POST "${{ secrets.APP_URL }}/api/agent/scan" \
+          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/scan" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
 
@@ -25,6 +25,6 @@ jobs:
     steps:
       - name: Trigger resolve
         run: |
-          curl -f -X POST "${{ secrets.APP_URL }}/api/agent/resolve" \
+          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/resolve" \
             -H "Authorization: Bearer ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"
