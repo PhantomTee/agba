@@ -24,8 +24,41 @@ type YieldMarket = {
   eligibleIdle: number;
 };
 
+type YieldActivity = {
+  marketId: number;
+  usdcAmount: number;
+  txHash: string;
+  status: "confirmed";
+};
+
+type YieldState = {
+  contractUsdc: number;
+  contractUsyc: number;
+  minIdleUsdc: string;
+  totalEligibleIdle: number;
+  totalYieldEarned: number;
+  markets: YieldMarket[];
+  activity: YieldActivity[];
+  error: boolean;
+};
+
 export default async function YieldPage() {
   const state = await fetchYieldState();
+
+  if (state.error) {
+    return (
+      <main className="mx-auto max-w-4xl px-4 py-10">
+        <div className="border border-red-500/30 bg-red-500/10 p-6">
+          <p className="text-xs font-black uppercase tracking-[0.28em] text-red-300">Yield unavailable</p>
+          <h1 className="mt-2 font-display text-4xl font-black text-white">USYC Yield</h1>
+          <p className="mt-4 text-sm leading-relaxed text-white/75">
+            The yield dashboard could not load right now because required configuration or backend services are unavailable.
+            This is temporary once environment variables and upstream services are healthy.
+          </p>
+        </div>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10">
@@ -87,6 +120,24 @@ export default async function YieldPage() {
               </div>
             </div>
           </div>
+
+          <div className="border border-white/10 p-5">
+            <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
+            {state.activity.length === 0 ? (
+              <p className="mt-3 text-sm text-white/55">No confirmed USYC deposit transactions found yet.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {state.activity.map((item) => (
+                  <div key={`${item.txHash}-${item.marketId}`} className="border border-white/10 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Market #{item.marketId}</p>
+                    <p className="mt-1 text-sm font-bold text-white">{fmt(item.usdcAmount)} USDC invested</p>
+                    <p className="mt-1 text-xs text-[#2d6a4f]">Status: {item.status}</p>
+                    <p className="mt-1 break-all text-xs text-white/45">Tx: {item.txHash}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Integration model</h2>
             <p className="mt-3 text-sm leading-relaxed text-white/60">
@@ -115,55 +166,102 @@ export default async function YieldPage() {
   );
 }
 
-async function fetchYieldState() {
-  const supabase = getSupabaseAdmin();
-  const contract = getReadOnlyMarketContract();
-  const provider = getArcProvider();
-  const usdc = getReadOnlyUsdcContract();
-  const usyc = new Contract(getEnv("NEXT_PUBLIC_USYC_ADDRESS"), ERC20_ABI, provider);
-  const contractAddress = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
-  const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
-    supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
-    contract.marketCount().then((count: bigint) => Number(count)),
-    usdc.balanceOf(contractAddress),
-    usyc.balanceOf(contractAddress),
-  ]);
-
-  const rows = (dbMarkets || []).filter((market) => Number(market.id) <= marketCount);
-  const markets = await Promise.all(
-    rows.map(async (market) => {
-      const [onchain, usycSharesRaw, yieldRaw, principalRaw] = await Promise.all([
-        contract.getMarket(Number(market.id)),
-        contract.getMarketUSYCBalance(Number(market.id)),
-        contract.getMarketYieldEarned(Number(market.id)),
-        contract.marketUsycPrincipal(Number(market.id)).catch(() => BigInt(0)),
-      ]);
-      if (Number(onchain.id) === 0) return null;
-      const pool = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
-      const investedPrincipal = Number(formatUnits(principalRaw, 6));
-      return {
-        id: Number(onchain.id),
-        question: onchain.question || market.question,
-        category: onchain.category || market.category,
-        pool,
-        investedPrincipal,
-        usycShares: Number(formatUnits(usycSharesRaw, 6)),
-        yieldEarned: Number(formatUnits(yieldRaw, 6)),
-        resolved: onchain.resolved,
-        eligibleIdle: onchain.resolved ? 0 : Math.max(0, pool - investedPrincipal),
-      };
-    }),
-  );
-  const currentMarkets = markets.filter((market): market is YieldMarket => market !== null);
-
-  return {
-    contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
-    contractUsyc: Number(formatUnits(contractUsycRaw, 6)),
+async function fetchYieldState(): Promise<YieldState> {
+  const baseState: YieldState = {
+    contractUsdc: 0,
+    contractUsyc: 0,
     minIdleUsdc: process.env.AGENT_USYC_MIN_IDLE_USDC || "1",
-    totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
-    totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
-    markets: currentMarkets,
+    totalEligibleIdle: 0,
+    totalYieldEarned: 0,
+    markets: [],
+    activity: [],
+    error: false,
   };
+
+  let usycAddress = "";
+  let contractAddress = "";
+  try {
+    usycAddress = getEnv("NEXT_PUBLIC_USYC_ADDRESS");
+    contractAddress = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
+  } catch {
+    return { ...baseState, error: true };
+  }
+
+  try {
+    const supabase = getSupabaseAdmin();
+    const contract = getReadOnlyMarketContract();
+    const provider = getArcProvider();
+    const usdc = getReadOnlyUsdcContract();
+    const usyc = new Contract(usycAddress, ERC20_ABI, provider);
+    let depositLogs: Array<{ args?: { marketId?: bigint; usdcAmount?: bigint }; transactionHash: string }> = [];
+    try {
+      const latestBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 1200);
+      depositLogs = (await contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock)) as typeof depositLogs;
+    } catch {
+      depositLogs = [];
+    }
+
+    const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
+      supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
+      contract.marketCount().then((count: bigint) => Number(count)),
+      usdc.balanceOf(contractAddress),
+      usyc.balanceOf(contractAddress),
+    ]);
+
+    const rows = (dbMarkets || []).filter((market) => Number(market.id) <= marketCount);
+    const markets = await Promise.all(
+      rows.map(async (market) => {
+        try {
+          const [onchain, usycSharesRaw, yieldRaw, principalRaw] = await Promise.all([
+            contract.getMarket(Number(market.id)),
+            contract.getMarketUSYCBalance(Number(market.id)),
+            contract.getMarketYieldEarned(Number(market.id)),
+            contract.marketUsycPrincipal(Number(market.id)).catch(() => BigInt(0)),
+          ]);
+          if (Number(onchain.id) === 0) return null;
+          const pool = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
+          const investedPrincipal = Number(formatUnits(principalRaw, 6));
+          return {
+            id: Number(onchain.id),
+            question: onchain.question || market.question,
+            category: onchain.category || market.category,
+            pool,
+            investedPrincipal,
+            usycShares: Number(formatUnits(usycSharesRaw, 6)),
+            yieldEarned: Number(formatUnits(yieldRaw, 6)),
+            resolved: onchain.resolved,
+            eligibleIdle: onchain.resolved ? 0 : Math.max(0, pool - investedPrincipal),
+          };
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    const currentMarkets = markets.filter((market): market is YieldMarket => market !== null);
+    const activity = depositLogs
+      .slice(-10)
+      .reverse()
+      .map((log) => ({
+        marketId: Number(log.args?.marketId || 0),
+        usdcAmount: Number(formatUnits(log.args?.usdcAmount || BigInt(0), 6)),
+        txHash: log.transactionHash,
+        status: "confirmed" as const,
+      }))
+      .filter((item) => item.marketId > 0);
+    return {
+      ...baseState,
+      contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
+      contractUsyc: Number(formatUnits(contractUsycRaw, 6)),
+      totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
+      totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
+      markets: currentMarkets,
+      activity,
+    };
+  } catch {
+    return { ...baseState, error: true };
+  }
 }
 
 function Metric({ label, value }: { label: string; value: string }) {

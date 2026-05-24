@@ -28,3 +28,8 @@ function normalizeInitialOdds(initialYesProbability?: number | null) {
   if (initialYesProbability == null || !Number.isFinite(initialYesProbability)) return 50;
   return Math.min(95, Math.max(5, Math.round(initialYesProbability)));
 }
+
+
+export function formatTokenAmount(value: number | string, currency: "USDC" | "EURC") {
+  return `${formatUsdc(value)} ${currency}`;
+}
