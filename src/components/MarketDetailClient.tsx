@@ -84,7 +84,7 @@ export function MarketDetailClient({ id }: { id: string }) {
                     </span>
                   </div>
                   <div className="shrink-0 text-right">
-                    <span className="text-sm font-bold text-white">{bet.currency || "USDC"} {formatUsdc(bet.amount_usdc)}</span>
+                    <span className="text-sm font-bold text-white">{formatUsdc(bet.amount_usdc)} {bet.currency || "USDC"}</span>
                     <p className="text-xs text-white/35">{new Date(bet.created_at).toLocaleString()}</p>
                   </div>
                 </div>

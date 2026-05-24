@@ -11,7 +11,7 @@ export async function GET(_: NextRequest, { params }: { params: { marketId: stri
   if (error) {
     return new Response(error.message, { status: 500 });
   }
-  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0));
+  const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0), market.initial_probability_yes ?? market.groq_yes_probability);
   return new ImageResponse(
     (
       <div
