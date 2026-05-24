@@ -58,7 +58,7 @@ export type AgentDecision = {
   suitable: boolean;
   question: string;
   category: Category;
-  durationDays: 7 | 14 | 30;
+  durationDays: number;
   resolutionCriteria: string;
   reasoning: string;
   yesProbability: number | null;

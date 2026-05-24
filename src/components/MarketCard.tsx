@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { CATEGORY_COLORS } from "@/lib/constants";
-import { calculateOdds, formatUsdc, timeRemaining } from "@/lib/odds";
+import { calculateOdds, formatTokenAmount, formatUsdc, timeRemaining } from "@/lib/odds";
 import type { Market } from "@/lib/types";
 
 export function MarketCard({ market }: { market: Market }) {
@@ -55,7 +55,7 @@ export function MarketCard({ market }: { market: Market }) {
         </Link>
       </div>
       <div className="mt-3 text-xs font-bold uppercase tracking-[0.2em] text-white/45">
-        USDC {formatUsdc(total)} + EURC {formatUsdc(eurcTotal)} at stake
+        {formatTokenAmount(total, "USDC")} + {formatTokenAmount(eurcTotal, "EURC")} at stake
       </div>
     </article>
   );
