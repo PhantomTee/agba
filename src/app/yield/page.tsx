@@ -202,11 +202,15 @@ async function fetchYieldState(): Promise<YieldState> {
       depositLogs = [];
     }
 
+    const latestBlock = await provider.getBlockNumber();
+    const fromBlock = Math.max(0, latestBlock - 1200);
+    const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw, depositLogs] = await Promise.all([
     const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
       supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
       contract.marketCount().then((count: bigint) => Number(count)),
       usdc.balanceOf(contractAddress),
       usyc.balanceOf(contractAddress),
+      contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock),
     ]);
 
     const rows = (dbMarkets || []).filter((market) => Number(market.id) <= marketCount);
