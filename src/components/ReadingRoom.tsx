@@ -48,7 +48,7 @@ export function ReadingRoom() {
   }, []);
 
   return (
-    <aside className="lg:sticky lg:top-32 lg:h-[calc(100vh-9rem)]">
+    <aside className="min-w-0 lg:sticky lg:top-32 lg:h-[calc(100vh-9rem)]">
       <div className="border-l border-[#f5a623] pl-4">
         <h2 className="font-display text-3xl font-black text-white">AI Reading Room</h2>
         <p className="mt-1 text-sm text-white/50">Àgbà is reading Africa right now</p>
@@ -59,7 +59,7 @@ export function ReadingRoom() {
         {!loading && !error && items.length === 0 && <p className="text-sm text-white/50">No articles scanned yet.</p>}
         {items.map((item) => (
           <article key={item.id} className="border-b border-white/10 pb-4">
-            <a href={item.url} target="_blank" rel="noreferrer" className="text-sm font-bold leading-snug text-white hover:text-[#f5a623]">
+            <a href={item.url} target="_blank" rel="noreferrer" className="block break-words text-sm font-bold leading-snug text-white hover:text-[#f5a623]">
               {item.headline}
             </a>
             <div className="mt-2 flex items-center gap-2">
