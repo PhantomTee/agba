@@ -24,7 +24,7 @@ export function HomeClient() {
 
   return (
     <main className="mx-auto grid max-w-7xl gap-10 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_380px]">
-      <section>
+      <section className="min-w-0">
         {/* Hero */}
         <div className="border-b border-white/10 pb-8">
           <p className="mb-3 text-sm font-black uppercase tracking-[0.28em] text-[#f5a623]">
