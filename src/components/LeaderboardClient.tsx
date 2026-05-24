@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { formatUsdc } from "@/lib/odds";
+import { formatTokenAmount } from "@/lib/odds";
 
 type Row = { wallet: string; volume: number; won: number; settled: number; correct: number; accuracy: number };
 
@@ -26,9 +26,9 @@ export function LeaderboardClient() {
     <main className="mx-auto max-w-7xl px-4 py-10">
       <h1 className="font-display text-6xl font-black text-white">Leaderboard</h1>
       <div className="mt-8 grid gap-8 lg:grid-cols-3">
-        <Table title="Top USDC Won" rows={data.byWon} metric={(row) => `USDC ${formatUsdc(row.won)}`} />
+        <Table title="Top USDC Won" rows={data.byWon} metric={(row) => formatTokenAmount(row.won, "USDC")} />
         <Table title="Top Accuracy" rows={data.byAccuracy} metric={(row) => `${Math.round(row.accuracy * 100)}%`} />
-        <Table title="Top Volume" rows={data.byVolume} metric={(row) => `USDC ${formatUsdc(row.volume)}`} />
+        <Table title="Top Volume" rows={data.byVolume} metric={(row) => formatTokenAmount(row.volume, "USDC")} />
       </div>
     </main>
   );
