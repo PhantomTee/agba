@@ -10,7 +10,7 @@ export const metadata: Metadata = {
   description: "Idle USDC and USYC yield operations for Agba market pools.",
 };
 
-export const dynamic = "force-dynamic";
+export const revalidate = 60;
 
 type YieldMarket = {
   id: number;
@@ -44,6 +44,9 @@ type YieldState = {
   marketsLoaded: number;
   marketsExpected: number;
   eligibleMarkets: number;
+  totalPoolUsdc: number;
+  investCapacityUsdc: number;
+  currentInvestedUsdc: number;
   error: boolean;
 };
 
@@ -153,12 +156,36 @@ export default async function YieldPage() {
                 <p className="mt-1 font-black text-white">15 min</p>
               </div>
             </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Total pool</p>
+                <p className="mt-1 font-black text-white">${fmt(state.totalPoolUsdc)}</p>
+              </div>
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Invest cap (70%)</p>
+                <p className="mt-1 font-black text-white">${fmt(state.investCapacityUsdc)}</p>
+              </div>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">In USYC now</p>
+                <p className="mt-1 font-black text-white">${fmt(state.currentInvestedUsdc)}</p>
+              </div>
+              <div className="border border-white/10 p-3">
+                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Remaining cap</p>
+                <p className="mt-1 font-black text-white">${fmt(Math.max(0, state.investCapacityUsdc - state.currentInvestedUsdc))}</p>
+              </div>
+            </div>
           </div>
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
             {state.activity.length === 0 ? (
               <p className="mt-3 text-sm text-white/55">
-                No confirmed USYC deposit transactions found yet. This usually means there are no eligible idle balances above the minimum threshold, sweep has not run successfully yet, or cap room is currently full.
+                {state.totalPoolUsdc === 0
+                  ? "No bets placed yet — all market pools are empty. The sweep needs at least $" + state.minIdleUsdc + " idle USDC per market before it can invest."
+                  : state.totalEligibleIdle < Number(state.minIdleUsdc)
+                  ? "All idle USDC ($" + fmt(state.totalEligibleIdle) + ") is below the $" + state.minIdleUsdc + " per-market minimum. Place more bets or lower AGENT_USYC_MIN_IDLE_USDC."
+                  : "Eligible idle exists but no deposits confirmed yet. Check that APP_URL and CRON_SECRET are set as GitHub Actions secrets so the sweep can reach this app."}
               </p>
             ) : (
               <div className="mt-3 space-y-3">
@@ -216,6 +243,9 @@ async function fetchYieldState(): Promise<YieldState> {
     marketsLoaded: 0,
     marketsExpected: 0,
     eligibleMarkets: 0,
+    totalPoolUsdc: 0,
+    investCapacityUsdc: 0,
+    currentInvestedUsdc: 0,
     error: false,
   };
 
@@ -243,7 +273,7 @@ async function fetchYieldState(): Promise<YieldState> {
       depositLogs = [];
     }
     const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
-      supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
+      supabase.from("markets").select("id,question,category,yes_pool,no_pool").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
       contract.marketCount().then((count: bigint) => Number(count)),
       usdc.balanceOf(contractAddress),
       usyc.balanceOf(contractAddress),
@@ -252,6 +282,7 @@ async function fetchYieldState(): Promise<YieldState> {
     const rows = (dbMarkets || []).filter((market) => Number(market.id) <= marketCount);
     const markets = await Promise.all(
       rows.map(async (market) => {
+        const dbPool = Number(market.yes_pool || 0) + Number(market.no_pool || 0);
         try {
           const [onchain, usycSharesRaw, yieldRaw, principalRaw] = await Promise.all([
             contract.getMarket(Number(market.id)),
@@ -259,7 +290,7 @@ async function fetchYieldState(): Promise<YieldState> {
             contract.getMarketYieldEarned(Number(market.id)),
             contract.marketUsycPrincipal(Number(market.id)).catch(() => BigInt(0)),
           ]);
-          if (Number(onchain.id) === 0) return null;
+          if (Number(onchain.id) === 0 || onchain.resolved) return null;
           const pool = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
           const investedPrincipal = Number(formatUnits(principalRaw, 6));
           return {
@@ -270,11 +301,22 @@ async function fetchYieldState(): Promise<YieldState> {
             investedPrincipal,
             usycShares: Number(formatUnits(usycSharesRaw, 6)),
             yieldEarned: Number(formatUnits(yieldRaw, 6)),
-            resolved: onchain.resolved,
-            eligibleIdle: onchain.resolved ? 0 : Math.max(0, pool - investedPrincipal),
+            resolved: false,
+            eligibleIdle: Math.max(0, pool - investedPrincipal),
           };
         } catch {
-          return null;
+          // On-chain call failed: fall back to Supabase pool so the total stays stable across refreshes
+          return {
+            id: Number(market.id),
+            question: market.question,
+            category: market.category,
+            pool: dbPool,
+            investedPrincipal: 0,
+            usycShares: 0,
+            yieldEarned: 0,
+            resolved: false,
+            eligibleIdle: dbPool,
+          };
         }
       }),
     );
@@ -291,6 +333,11 @@ async function fetchYieldState(): Promise<YieldState> {
       }))
       .filter((item) => item.marketId > 0);
 
+    const totalPoolUsdc = currentMarkets.reduce((sum, m) => sum + m.pool, 0);
+    const maxInvestedBps = Math.min(9000, Math.max(1000, Number(process.env.AGENT_USYC_MAX_INVESTED_BPS || "7000")));
+    const investCapacityUsdc = (totalPoolUsdc * maxInvestedBps) / 10_000;
+    const currentInvestedUsdc = currentMarkets.reduce((sum, m) => sum + m.investedPrincipal, 0);
+
     return {
       ...baseState,
       contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
@@ -304,6 +351,9 @@ async function fetchYieldState(): Promise<YieldState> {
       marketsLoaded: currentMarkets.length,
       marketsExpected: rows.length,
       eligibleMarkets: currentMarkets.filter((market) => market.eligibleIdle > 0).length,
+      totalPoolUsdc,
+      investCapacityUsdc,
+      currentInvestedUsdc,
     };
   } catch {
     return { ...baseState, eligibleIdleReady: false, error: true };
