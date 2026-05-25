@@ -85,7 +85,7 @@ export async function POST(request: NextRequest) {
           groq_suitable: decision.suitable,
           groq_question: decision.question,
           groq_category: decision.category,
-          groq_duration_days: normalizedDurationDays,
+          groq_duration_days: decision.durationDays,
           groq_reasoning: decision.reasoning,
         })
         .eq("id", inserted.id);
