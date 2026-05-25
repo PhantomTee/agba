@@ -193,15 +193,6 @@ async function fetchYieldState(): Promise<YieldState> {
     const provider = getArcProvider();
     const usdc = getReadOnlyUsdcContract();
     const usyc = new Contract(usycAddress, ERC20_ABI, provider);
-    let depositLogs: Array<{ args?: { marketId?: bigint; usdcAmount?: bigint }; transactionHash: string }> = [];
-    try {
-      const latestBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 1200);
-      depositLogs = (await contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock)) as typeof depositLogs;
-    } catch {
-      depositLogs = [];
-    }
-
     const latestBlock = await provider.getBlockNumber();
     const fromBlock = Math.max(0, latestBlock - 1200);
     const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw, depositLogs] = await Promise.all([
