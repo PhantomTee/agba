@@ -20,6 +20,8 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
     minIdleUsdc: formatUnits(minIdleRaw, 6),
   });
   const supabase = getSupabaseAdmin();
+  console.log("agent_yield_sweep_started", { maxMarkets, minIdleUsdc: formatUnits(minIdleRaw, 6), cappedMaxInvestedBps });
+
   const [{ data: dbMarkets, error }, marketCount] = await Promise.all([
     supabase.from("markets").select("id,question").eq("resolved", false).order("created_at", { ascending: true }).limit(100),
     contract.marketCount().then((count: bigint) => Number(count)),
@@ -90,6 +92,7 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
       }
 
       const investRaw = availableRaw > remainingInvestCapacityRaw ? remainingInvestCapacityRaw : availableRaw;
+      console.log("agent_yield_attempt", { marketId, availableUsdc: formatUnits(availableRaw, 6), investUsdc: formatUnits(investRaw, 6), remainingCapacityUsdc: formatUnits(remainingInvestCapacityRaw, 6) });
       if (investRaw < minIdleRaw) {
         skipped += 1;
         continue;
@@ -112,6 +115,8 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         investedUsdc: formatUnits(investAmountRaw, 6),
         txHash: receipt?.hash || tx.hash,
       });
+      console.log("agent_yield_success", { marketId, investedUsdc: formatUnits(investRaw, 6), txHash: receipt?.hash || tx.hash });
+
       investments.push({
         marketId,
         investedUsdc: formatUnits(investAmountRaw, 6),
