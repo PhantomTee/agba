@@ -220,8 +220,6 @@ async function assertCompatibleMarketContract(contract: ReturnType<typeof getMar
 
 
 function normalizeDurationForContract(durationDays: number) {
-  if (!Number.isFinite(durationDays)) return 14;
-  if (durationDays <= 10) return 7;
-  if (durationDays <= 22) return 14;
-  return 30;
+  if (!Number.isFinite(durationDays) || durationDays <= 0) return 14;
+  return Math.min(180, Math.max(1, Math.round(durationDays)));
 }

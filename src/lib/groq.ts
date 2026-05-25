@@ -25,7 +25,14 @@ export async function analyzeNewsForMarket(input: {
         role: "system",
         content: `You are a prediction market designer for African news. Turn every article into a sharp forward-looking binary YES/NO question. The article is your trigger, not your constraint - always look for the NEXT uncertain outcome it implies.
 
-DURATION: you must choose exactly one of 7, 14, or 30 days. Use 7 for imminent short-term outcomes (next fixture, weekly rate check), 14 for medium-term events, 30 for slower-moving outcomes (MPC decisions, legislation, monthly data releases). Never output any other value.
+DURATION: choose any whole number of days from 1 to 180. Match the number to the genuine natural deadline the article implies — do NOT round to arbitrary milestones.
+- 1–7:    Breaking news, next-day fixtures, 48–72 h rate checks
+- 7–14:   Weekly data releases, imminent fixtures, short FX windows
+- 14–30:  Monthly indicators (CPI, MPC, NGX ASI), near-term policy votes
+- 30–60:  Parliamentary bills, court rulings, election campaigns
+- 60–90:  Quarterly financial reports, multi-round competitions
+- 90–180: Long-term political outcomes, annual targets, multi-leg deals
+If the article gives an explicit date, compute the exact number of days from today. Never output a value outside 1–180.
 
 FOREX / CURRENCY - NEVER reject, always find a market:
 - Rate reported (e.g. "Naira at 1590"): ask if it crosses the NEXT round level in 7-14 days. E.g. "Will USD/NGN exceed 1650 by [14 days from now]?"
@@ -77,13 +84,13 @@ SECURITY:
 REJECT (suitable: false) ONLY when:
 - The outcome definitively already happened and there is zero uncertain forward angle.
 - Pure opinion piece with nothing numeric or event-based to verify.
-- Absolutely no plausible resolution date within 30 days.
+- Absolutely no plausible resolution date within 180 days.
 
 Output ONLY valid JSON - no markdown, no backticks, no commentary:
 When suitable is true, estimate the chance that the generated question resolves YES as initialProbabilityYes from 5 to 95. Estimate probability this resolves YES from news context, history, and base rates. If uncertain use 40-60. If strong signal use 65-80. Never use exactly 50 unless truly no information. Never output 0 or 100. Also mirror this value as yesProbability for backward compatibility.
 
 Output ONLY valid JSON - no markdown, no backticks, no commentary:
-{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":7|14|30,"resolutionCriteria":string,"reasoning":string,"initialProbabilityYes":number,"yesProbability":number|null}`,
+{"suitable":boolean,"question":string,"category":"FOREX"|"POLITICS"|"SPORTS"|"ECONOMY"|"SECURITY"|"COMMODITIES"|"TECH"|"OTHER","durationDays":number,"resolutionCriteria":string,"reasoning":string,"initialProbabilityYes":number,"yesProbability":number|null}`,
       },
       {
         role: "user",
@@ -131,18 +138,13 @@ function normalizeInitialProbability(value: unknown) {
 }
 
 
-const VALID_DURATIONS = [7, 14, 30] as const;
-type ValidDuration = (typeof VALID_DURATIONS)[number];
-
-function normalizeDurationDays(value: unknown, category: Category): ValidDuration {
-  const parsedDays = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsedDays)) return defaultDurationForCategory(category);
-  return VALID_DURATIONS.reduce((best, candidate) =>
-    Math.abs(candidate - parsedDays) < Math.abs(best - parsedDays) ? candidate : best
-  );
+function normalizeDurationDays(value: unknown, category: Category): number {
+  const days = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(days) || days <= 0) return defaultDurationForCategory(category);
+  return Math.min(180, Math.max(1, Math.round(days)));
 }
 
-function defaultDurationForCategory(category: Category): ValidDuration {
+function defaultDurationForCategory(category: Category): number {
   if (category === "SPORTS" || category === "FOREX" || category === "COMMODITIES") return 14;
   return 30;
 }

@@ -107,7 +107,7 @@ contract AgbaMarket {
         uint256 initialProbabilityYes
     ) internal returns (uint256) {
         require(bytes(question).length > 0, "question required");
-        require(durationDays == 7 || durationDays == 14 || durationDays == 30, "invalid duration");
+        require(durationDays >= 1 && durationDays <= 180, "invalid duration");
         require(initialProbabilityYes <= 100, "invalid probability");
         marketCount += 1;
         Market storage market = markets[marketCount];
