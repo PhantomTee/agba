@@ -6,14 +6,11 @@ import { getSupabaseAdmin } from "./supabase";
 type AgentYieldSweepOptions = {
   maxMarkets?: number;
   minIdleUsdc?: string;
-  maxInvestedBps?: number;
 };
 
 export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
   const maxMarkets = options.maxMarkets ?? Number(getOptionalEnv("AGENT_USYC_MAX_MARKETS") || "3");
   const minIdleRaw = parseUnits(options.minIdleUsdc ?? getOptionalEnv("AGENT_USYC_MIN_IDLE_USDC") ?? "1", 6);
-  const maxInvestedBps = options.maxInvestedBps ?? Number(getOptionalEnv("AGENT_USYC_MAX_INVESTED_BPS") || "7000");
-  const cappedMaxInvestedBps = Math.min(9000, Math.max(1000, Math.round(maxInvestedBps)));
   const contract = getMarketContract();
   const supabase = getSupabaseAdmin();
   const [{ data: dbMarkets, error }, marketCount] = await Promise.all([
@@ -24,33 +21,12 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
 
   let checked = 0;
   let invested = 0;
-  let totalOpenPoolRaw = BigInt(0);
-  let totalPrincipalRaw = BigInt(0);
   let skipped = 0;
   const investments: Array<{ marketId: number; investedUsdc: string; txHash: string }> = [];
   const failures: Array<{ marketId: number; error: string }> = [];
 
   for (const row of dbMarkets || []) {
-    const marketId = Number(row.id);
-    if (!Number.isInteger(marketId) || marketId <= 0 || marketId > marketCount) continue;
-    try {
-      const [market, principalRaw] = await Promise.all([
-        contract.getMarket(marketId),
-        contract.marketUsycPrincipal(marketId).catch(() => BigInt(0)),
-      ]);
-      if (Number(market.id) === 0 || market.resolved) continue;
-      totalOpenPoolRaw += market.yesPool + market.noPool;
-      totalPrincipalRaw += principalRaw;
-    } catch {
-      continue;
-    }
-  }
-
-  const maxInvestedRaw = (totalOpenPoolRaw * BigInt(cappedMaxInvestedBps)) / BigInt(10_000);
-  let remainingInvestCapacityRaw = maxInvestedRaw > totalPrincipalRaw ? maxInvestedRaw - totalPrincipalRaw : BigInt(0);
-
-  for (const row of dbMarkets || []) {
-    if (invested >= maxMarkets || remainingInvestCapacityRaw === BigInt(0)) break;
+    if (invested >= maxMarkets) break;
     const marketId = Number(row.id);
     if (!Number.isInteger(marketId) || marketId <= 0 || marketId > marketCount) {
       skipped += 1;
@@ -76,22 +52,15 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         continue;
       }
 
-      const investRaw = availableRaw > remainingInvestCapacityRaw ? remainingInvestCapacityRaw : availableRaw;
-      if (investRaw < minIdleRaw) {
-        skipped += 1;
-        continue;
-      }
-
-      const tx = await contract.investInUSYC(marketId, investRaw);
+      const tx = await contract.investInUSYC(marketId, availableRaw);
       const receipt = await tx.wait();
       const { error: updateError } = await supabase.from("markets").update({ usyc_invested: true }).eq("id", marketId);
       if (updateError && !isMissingOptionalMarketColumnError(updateError)) throw updateError;
 
       invested += 1;
-      remainingInvestCapacityRaw = investRaw >= remainingInvestCapacityRaw ? BigInt(0) : remainingInvestCapacityRaw - investRaw;
       investments.push({
         marketId,
-        investedUsdc: formatUnits(investRaw, 6),
+        investedUsdc: formatUnits(availableRaw, 6),
         txHash: receipt?.hash || tx.hash,
       });
 
@@ -99,7 +68,7 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         await supabase.channel("agent_yield").send({
           type: "broadcast",
           event: "invested",
-          payload: { marketId, investedUsdc: formatUnits(investRaw, 6), txHash: receipt?.hash || tx.hash },
+          payload: { marketId, investedUsdc: formatUnits(availableRaw, 6), txHash: receipt?.hash || tx.hash },
         });
       }
     } catch (error) {
@@ -112,10 +81,6 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
     invested,
     skipped,
     minIdleUsdc: formatUnits(minIdleRaw, 6),
-    maxInvestedBps: cappedMaxInvestedBps,
-    targetInvestedUsdc: formatUnits(maxInvestedRaw, 6),
-    currentInvestedUsdc: formatUnits(totalPrincipalRaw, 6),
-    remainingInvestCapacityUsdc: formatUnits(remainingInvestCapacityRaw, 6),
     investments,
     failures,
   };
