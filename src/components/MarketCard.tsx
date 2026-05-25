@@ -8,7 +8,7 @@ export function MarketCard({ market }: { market: Market }) {
   const total = Number(market.yes_pool || 0) + Number(market.no_pool || 0);
   const eurcTotal = Number(market.eurc_yes_pool || 0) + Number(market.eurc_no_pool || 0);
   return (
-    <article className="relative border-b border-white/10 py-7">
+    <article className="relative min-w-0 overflow-x-hidden border-b border-white/10 py-7">
       {market.resolved && (
         <div className="absolute right-0 top-7 border border-[#f5a623] px-3 py-1 text-xs font-black uppercase text-[#f5a623]">
           Resolved: {market.outcome ? "YES" : "NO"}
@@ -23,20 +23,20 @@ export function MarketCard({ market }: { market: Market }) {
         {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
         {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">💰 Earning yield in USYC while open</span>}
       </div>
-      <Link href={`/market/${market.id}`} className="font-display text-2xl font-black leading-tight text-white hover:text-[#f5a623] md:text-4xl">
+      <Link href={`/market/${market.id}`} className="block break-words font-display text-2xl font-black leading-tight text-white hover:text-[#f5a623] md:text-4xl">
         {market.question}
       </Link>
       <div className="mt-3 text-sm text-white/55">
         {market.news_items?.url ? (
-          <a href={market.news_items.url} target="_blank" rel="noreferrer" className="hover:text-white">
+          <a href={market.news_items.url} target="_blank" rel="noreferrer" className="break-all hover:text-white">
             Via {market.news_items.source_name || "source"}
           </a>
         ) : (
           "Source article unavailable"
         )}
       </div>
-      <div className="mt-5 overflow-hidden border border-white/10 bg-[#2d6a4f]">
-        <div className="h-3 bg-[#f5a623]" style={{ width: `${odds.yesOdds}%` }} />
+      <div className="mt-5 w-full max-w-full overflow-hidden border border-white/10 bg-[#2d6a4f]">
+        <div className="h-3 max-w-full bg-[#f5a623]" style={{ width: `${Math.min(100, Math.max(0, odds.yesOdds))}%` }} />
       </div>
       {odds.source !== "pool" && (
         <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-white/40">
@@ -46,7 +46,7 @@ export function MarketCard({ market }: { market: Market }) {
       {market.resolved && Number(market.yield_earned || 0) > 0 && (
         <p className="mt-2 text-xs font-bold text-[#2d6a4f]">+${formatUsdc(Number(market.yield_earned || 0))} yield earned for winners</p>
       )}
-      <div className="mt-4 grid grid-cols-2 gap-3">
+      <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
         <Link href={`/market/${market.id}?side=yes`} className="bg-[#f5a623] px-4 py-3 text-center text-sm font-black text-black">
           YES {odds.yesOdds}%
         </Link>
