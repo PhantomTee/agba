@@ -24,6 +24,13 @@ type YieldMarket = {
   eligibleIdle: number;
 };
 
+type YieldActivity = {
+  marketId: number;
+  usdcAmount: number;
+  txHash: string;
+  status: "confirmed";
+};
+
 type YieldState = {
   contractUsdc: number;
   contractUsyc: number;
@@ -31,6 +38,7 @@ type YieldState = {
   totalEligibleIdle: number;
   totalYieldEarned: number;
   markets: YieldMarket[];
+  activity: YieldActivity[];
   error: boolean;
 };
 
@@ -113,6 +121,24 @@ export default async function YieldPage() {
             </div>
           </div>
           <div className="border border-white/10 p-5">
+            <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
+            {state.activity.length === 0 ? (
+              <p className="mt-3 text-sm text-white/55">No confirmed USYC deposit transactions found yet.</p>
+            ) : (
+              <div className="mt-3 space-y-3">
+                {state.activity.map((item) => (
+                  <div key={`${item.txHash}-${item.marketId}`} className="border border-white/10 p-3">
+                    <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Market #{item.marketId}</p>
+                    <p className="mt-1 text-sm font-bold text-white">{fmt(item.usdcAmount)} USDC invested</p>
+                    <p className="mt-1 text-xs text-[#2d6a4f]">Status: {item.status}</p>
+                    <p className="mt-1 break-all text-xs text-white/45">Tx: {item.txHash}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Integration model</h2>
             <p className="mt-3 text-sm leading-relaxed text-white/60">
               USYC is a tokenized money market fund. Circle documents USYC subscription and redemption through USDC, automatic yield through a rising token price,
@@ -148,6 +174,7 @@ async function fetchYieldState(): Promise<YieldState> {
     totalEligibleIdle: 0,
     totalYieldEarned: 0,
     markets: [],
+    activity: [],
     error: false,
   };
 
@@ -166,6 +193,14 @@ async function fetchYieldState(): Promise<YieldState> {
     const provider = getArcProvider();
     const usdc = getReadOnlyUsdcContract();
     const usyc = new Contract(usycAddress, ERC20_ABI, provider);
+    let depositLogs: Array<{ args?: { marketId?: bigint; usdcAmount?: bigint }; transactionHash: string }> = [];
+    try {
+      const latestBlock = await provider.getBlockNumber();
+      const fromBlock = Math.max(0, latestBlock - 1200);
+      depositLogs = (await contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock)) as typeof depositLogs;
+    } catch {
+      depositLogs = [];
+    }
     const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
       supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
       contract.marketCount().then((count: bigint) => Number(count)),
@@ -204,6 +239,17 @@ async function fetchYieldState(): Promise<YieldState> {
     );
 
     const currentMarkets = markets.filter((market): market is YieldMarket => market !== null);
+    const activity = depositLogs
+      .slice(-10)
+      .reverse()
+      .map((log) => ({
+        marketId: Number(log.args?.marketId || 0),
+        usdcAmount: Number(formatUnits(log.args?.usdcAmount || BigInt(0), 6)),
+        txHash: log.transactionHash,
+        status: "confirmed" as const,
+      }))
+      .filter((item) => item.marketId > 0);
+
     return {
       ...baseState,
       contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
@@ -211,6 +257,7 @@ async function fetchYieldState(): Promise<YieldState> {
       totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
       totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
       markets: currentMarkets,
+      activity,
     };
   } catch {
     return { ...baseState, error: true };
