@@ -36,6 +36,7 @@ type YieldState = {
   contractUsyc: number;
   minIdleUsdc: string;
   totalEligibleIdle: number;
+  eligibleIdleReady: boolean;
   totalYieldEarned: number;
   markets: YieldMarket[];
   activity: YieldActivity[];
@@ -84,7 +85,10 @@ export default async function YieldPage() {
       <section className="mt-8 grid gap-3 md:grid-cols-4">
         <Metric label="Contract USDC" value={`$${fmt(state.contractUsdc)}`} />
         <Metric label="Contract USYC" value={fmt(state.contractUsyc)} />
-        <Metric label="Eligible idle USDC" value={`$${fmt(state.totalEligibleIdle)}`} />
+        <Metric
+          label="Eligible idle USDC"
+          value={state.eligibleIdleReady ? `$${fmt(state.totalEligibleIdle)}` : "Calculating..."}
+        />
         <Metric label="Recorded yield" value={`$${fmt(state.totalYieldEarned)}`} />
       </section>
 
@@ -204,6 +208,7 @@ async function fetchYieldState(): Promise<YieldState> {
     contractUsyc: 0,
     minIdleUsdc: process.env.AGENT_USYC_MIN_IDLE_USDC || "1",
     totalEligibleIdle: 0,
+    eligibleIdleReady: false,
     totalYieldEarned: 0,
     markets: [],
     activity: [],
@@ -291,6 +296,7 @@ async function fetchYieldState(): Promise<YieldState> {
       contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
       contractUsyc: Number(formatUnits(contractUsycRaw, 6)),
       totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
+      eligibleIdleReady: true,
       totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
       markets: currentMarkets,
       activity,
