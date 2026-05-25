@@ -15,6 +15,10 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
   const maxInvestedBps = options.maxInvestedBps ?? Number(getOptionalEnv("AGENT_USYC_MAX_INVESTED_BPS") || "7000");
   const cappedMaxInvestedBps = Math.min(9000, Math.max(1000, Math.round(maxInvestedBps)));
   const contract = getMarketContract();
+  console.log("[agentYield] sweep started", {
+    maxMarkets,
+    minIdleUsdc: formatUnits(minIdleRaw, 6),
+  });
   const supabase = getSupabaseAdmin();
   const [{ data: dbMarkets, error }, marketCount] = await Promise.all([
     supabase.from("markets").select("id,question").eq("resolved", false).order("created_at", { ascending: true }).limit(100),
@@ -32,6 +36,7 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
 
   for (const row of dbMarkets || []) {
     const marketId = Number(row.id);
+    console.log("[agentYield] checking market", { marketId });
     if (!Number.isInteger(marketId) || marketId <= 0 || marketId > marketCount) continue;
     try {
       const [market, principalRaw] = await Promise.all([
@@ -52,7 +57,9 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
   for (const row of dbMarkets || []) {
     if (invested >= maxMarkets || remainingInvestCapacityRaw === BigInt(0)) break;
     const marketId = Number(row.id);
+    console.log("[agentYield] checking market", { marketId });
     if (!Number.isInteger(marketId) || marketId <= 0 || marketId > marketCount) {
+      console.log("[agentYield] skipped invalid market id/range", { marketId, marketCount });
       skipped += 1;
       continue;
     }
@@ -65,6 +72,7 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         contract.getMarketUSYCBalance(marketId).catch(() => BigInt(0)),
       ]);
       if (Number(market.id) === 0 || market.resolved) {
+        console.log("[agentYield] skipped resolved or missing market", { marketId });
         skipped += 1;
         continue;
       }
@@ -72,6 +80,11 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
       const poolRaw = market.yesPool + market.noPool;
       const availableRaw = poolRaw > principalRaw ? poolRaw - principalRaw : BigInt(0);
       if (availableRaw < minIdleRaw) {
+        console.log("[agentYield] skipped below min idle", {
+          marketId,
+          availableUsdc: formatUnits(availableRaw, 6),
+          minIdleUsdc: formatUnits(minIdleRaw, 6),
+        });
         skipped += 1;
         continue;
       }
@@ -83,6 +96,10 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
       }
 
       const investAmountRaw = BigInt(investRaw);
+      console.log("[agentYield] attempting invest", {
+        marketId,
+        investUsdc: formatUnits(investAmountRaw, 6),
+      });
       const tx = await contract.investInUSYC(marketId, investAmountRaw);
       const receipt = await tx.wait();
       const { error: updateError } = await supabase.from("markets").update({ usyc_invested: true }).eq("id", marketId);
@@ -90,6 +107,11 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
 
       invested += 1;
       remainingInvestCapacityRaw = investAmountRaw >= remainingInvestCapacityRaw ? BigInt(0) : remainingInvestCapacityRaw - investAmountRaw;
+      console.log("[agentYield] invest success", {
+        marketId,
+        investedUsdc: formatUnits(investAmountRaw, 6),
+        txHash: receipt?.hash || tx.hash,
+      });
       investments.push({
         marketId,
         investedUsdc: formatUnits(investAmountRaw, 6),
@@ -104,9 +126,20 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         });
       }
     } catch (error) {
+      console.error("[agentYield] invest failed", {
+        marketId,
+        error: error instanceof Error ? error.message : "USYC investment failed",
+      });
       failures.push({ marketId, error: error instanceof Error ? error.message : "USYC investment failed" });
     }
   }
+
+  console.log("[agentYield] sweep completed", {
+    checked,
+    invested,
+    skipped,
+    failures: failures.length,
+  });
 
   return {
     checked,

@@ -225,7 +225,7 @@ async function fetchYieldState(): Promise<YieldState> {
     usycAddress = getEnv("NEXT_PUBLIC_USYC_ADDRESS");
     contractAddress = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
   } catch {
-    return { ...baseState, error: true };
+    return { ...baseState, eligibleIdleReady: false, error: true };
   }
 
   try {
@@ -306,7 +306,7 @@ async function fetchYieldState(): Promise<YieldState> {
       eligibleMarkets: currentMarkets.filter((market) => market.eligibleIdle > 0).length,
     };
   } catch {
-    return { ...baseState, error: true };
+    return { ...baseState, eligibleIdleReady: false, error: true };
   }
 }
 
