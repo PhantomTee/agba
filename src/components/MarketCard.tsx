@@ -21,7 +21,7 @@ export function MarketCard({ market }: { market: Market }) {
         <span className="text-xs font-bold text-white/55">{market.country || "AFRICA"}</span>
         <span className="text-xs text-white/45">{timeRemaining(market.resolves_at)}</span>
         {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
-        {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">💰 Earning yield in USYC while open</span>}
+        {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">Ⓔ Earning</span>}
       </div>
       <Link href={`/market/${market.id}`} className="block break-words font-display text-2xl font-black leading-tight text-white hover:text-[#f5a623] md:text-4xl">
         {market.question}

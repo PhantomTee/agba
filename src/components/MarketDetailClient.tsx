@@ -51,7 +51,7 @@ export function MarketDetailClient({ id }: { id: string }) {
         <h1 className="font-display text-5xl font-black leading-none text-white md:text-7xl">{market.question}</h1>
         <div className="mt-5 flex flex-wrap gap-3">
           {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
-          {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">💰 Earning yield in USYC while open</span>}
+          {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">Ⓔ Earning</span>}
           {market.resolved && Number(market.yield_earned || 0) > 0 && (
             <span className="text-xs font-black text-[#2d6a4f]">+${formatUsdc(Number(market.yield_earned || 0))} yield earned for winners</span>
           )}
