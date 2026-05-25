@@ -25,10 +25,14 @@ type YieldMarket = {
 };
 
 type YieldActivity = {
+  type: "invested" | "redeemed";
   marketId: number;
+  question: string;
   usdcAmount: number;
+  usycShares: number;
+  yieldEarned: number;
   txHash: string;
-  status: "confirmed";
+  blockNumber: number;
 };
 
 type YieldState = {
@@ -178,23 +182,48 @@ export default async function YieldPage() {
             </div>
           </div>
           <div className="border border-white/10 p-5">
-            <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
+            <div className="flex items-baseline justify-between">
+              <h2 className="font-display text-2xl font-black text-[#f5a623]">USYC Activity</h2>
+              {state.activity.length > 0 && (
+                <span className="text-xs font-bold text-white/35">{state.activity.length} event{state.activity.length !== 1 ? "s" : ""}</span>
+              )}
+            </div>
             {state.activity.length === 0 ? (
               <p className="mt-3 text-sm text-white/55">
                 {state.totalPoolUsdc === 0
                   ? "No bets placed yet — all market pools are empty. The sweep needs at least $" + state.minIdleUsdc + " idle USDC per market before it can invest."
                   : state.totalEligibleIdle < Number(state.minIdleUsdc)
                   ? "All idle USDC ($" + fmt(state.totalEligibleIdle) + ") is below the $" + state.minIdleUsdc + " per-market minimum. Place more bets or lower AGENT_USYC_MIN_IDLE_USDC."
-                  : "Eligible idle exists but no deposits confirmed yet. Check that APP_URL and CRON_SECRET are set as GitHub Actions secrets so the sweep can reach this app."}
+                  : "Eligible idle exists but no on-chain transactions yet. Check that APP_URL and CRON_SECRET are set as GitHub Actions secrets so the sweep can reach this app."}
               </p>
             ) : (
-              <div className="mt-3 space-y-3">
+              <div className="mt-3 space-y-2">
                 {state.activity.map((item) => (
-                  <div key={`${item.txHash}-${item.marketId}`} className="border border-white/10 p-3">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Market #{item.marketId}</p>
-                    <p className="mt-1 text-sm font-bold text-white">{fmt(item.usdcAmount)} USDC invested</p>
-                    <p className="mt-1 text-xs text-[#2d6a4f]">Status: {item.status}</p>
-                    <p className="mt-1 break-all text-xs text-white/45">Tx: {item.txHash}</p>
+                  <div key={`${item.txHash}-${item.blockNumber}`} className="border border-white/10 p-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-0.5 text-xs font-black ${item.type === "invested" ? "bg-[#f5a623] text-black" : "bg-[#2d6a4f] text-white"}`}>
+                        {item.type === "invested" ? "INVESTED" : "REDEEMED"}
+                      </span>
+                      <span className="text-xs font-bold text-white/40">Market #{item.marketId}</span>
+                      <span className="text-xs text-white/25">block {item.blockNumber}</span>
+                    </div>
+                    <p className="mt-2 text-xs font-bold leading-snug text-white line-clamp-2">{item.question}</p>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/55">
+                      {item.type === "invested" ? (
+                        <>
+                          <span>${fmt(item.usdcAmount)} USDC → USYC</span>
+                          {item.usycShares > 0 && <span>{fmt(item.usycShares)} USYC shares</span>}
+                        </>
+                      ) : (
+                        <>
+                          <span>${fmt(item.usdcAmount)} USDC received</span>
+                          {item.yieldEarned > 0 && <span className="text-[#2d6a4f]">+${fmt(item.yieldEarned)} yield</span>}
+                        </>
+                      )}
+                    </div>
+                    <p className="mt-2 font-mono text-xs text-white/30 break-all">
+                      {item.txHash.slice(0, 10)}…{item.txHash.slice(-8)}
+                    </p>
                   </div>
                 ))}
               </div>
@@ -264,14 +293,20 @@ async function fetchYieldState(): Promise<YieldState> {
     const provider = getArcProvider();
     const usdc = getReadOnlyUsdcContract();
     const usyc = new Contract(usycAddress, ERC20_ABI, provider);
-    let depositLogs: Array<{ args?: { marketId?: bigint; usdcAmount?: bigint }; transactionHash: string }> = [];
+
+    type InvestedLog = { args?: { marketId?: bigint; usdcAmount?: bigint; usycShares?: bigint }; transactionHash: string; blockNumber: number };
+    type RedeemedLog = { args?: { marketId?: bigint; usdcReceived?: bigint; yieldEarned?: bigint }; transactionHash: string; blockNumber: number };
+    let investedLogs: InvestedLog[] = [];
+    let redeemedLogs: RedeemedLog[] = [];
     try {
-      const latestBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 1200);
-      depositLogs = (await contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock)) as typeof depositLogs;
+      [investedLogs, redeemedLogs] = (await Promise.all([
+        contract.queryFilter(contract.filters.MarketUSYCInvested()),
+        contract.queryFilter(contract.filters.MarketUSYCRedeemed()),
+      ])) as [InvestedLog[], RedeemedLog[]];
     } catch {
-      depositLogs = [];
+      // leave both empty — activity section will show zero results
     }
+
     const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
       supabase.from("markets").select("id,question,category,yes_pool,no_pool").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
       contract.marketCount().then((count: bigint) => Number(count)),
@@ -322,16 +357,44 @@ async function fetchYieldState(): Promise<YieldState> {
     );
 
     const currentMarkets = markets.filter((market): market is YieldMarket => market !== null);
-    const activity = depositLogs
-      .slice(-10)
-      .reverse()
-      .map((log) => ({
+
+    // Build a question map for all markets referenced in events (may include resolved markets
+    // that are no longer in currentMarkets)
+    const questionMap = new Map<number, string>(currentMarkets.map((m) => [m.id, m.question]));
+    const missingIds = [...new Set([
+      ...investedLogs.map((l) => Number(l.args?.marketId || 0)),
+      ...redeemedLogs.map((l) => Number(l.args?.marketId || 0)),
+    ])].filter((id) => id > 0 && !questionMap.has(id));
+    if (missingIds.length > 0) {
+      const { data: resolvedRows } = await supabase.from("markets").select("id,question").in("id", missingIds);
+      for (const row of resolvedRows || []) questionMap.set(Number(row.id), row.question);
+    }
+
+    const activity: YieldActivity[] = [
+      ...investedLogs.map((log) => ({
+        type: "invested" as const,
         marketId: Number(log.args?.marketId || 0),
-        usdcAmount: Number(formatUnits(log.args?.usdcAmount || BigInt(0), 6)),
+        question: questionMap.get(Number(log.args?.marketId || 0)) ?? `Market #${Number(log.args?.marketId || 0)}`,
+        usdcAmount: Number(formatUnits(log.args?.usdcAmount ?? BigInt(0), 6)),
+        usycShares: Number(formatUnits(log.args?.usycShares ?? BigInt(0), 6)),
+        yieldEarned: 0,
         txHash: log.transactionHash,
-        status: "confirmed" as const,
-      }))
-      .filter((item) => item.marketId > 0);
+        blockNumber: log.blockNumber,
+      })),
+      ...redeemedLogs.map((log) => ({
+        type: "redeemed" as const,
+        marketId: Number(log.args?.marketId || 0),
+        question: questionMap.get(Number(log.args?.marketId || 0)) ?? `Market #${Number(log.args?.marketId || 0)}`,
+        usdcAmount: Number(formatUnits(log.args?.usdcReceived ?? BigInt(0), 6)),
+        usycShares: 0,
+        yieldEarned: Number(formatUnits(log.args?.yieldEarned ?? BigInt(0), 6)),
+        txHash: log.transactionHash,
+        blockNumber: log.blockNumber,
+      })),
+    ]
+      .filter((e) => e.marketId > 0)
+      .sort((a, b) => b.blockNumber - a.blockNumber)
+      .slice(0, 50);
 
     const totalPoolUsdc = currentMarkets.reduce((sum, m) => sum + m.pool, 0);
     const maxInvestedBps = Math.min(9000, Math.max(1000, Number(process.env.AGENT_USYC_MAX_INVESTED_BPS || "7000")));
