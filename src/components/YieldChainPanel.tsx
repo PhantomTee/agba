@@ -25,25 +25,55 @@ type ChainData = {
   activity: ActivityItem[];
 };
 
+// Single in-flight request shared across all component instances on the page.
+// Prevents three separate fetches when YieldChainMetrics, YieldAgentCard, and
+// YieldActivityPanel all mount at the same time.
+let _inflight: Promise<ChainData> | null = null;
+let _cache: ChainData | null = null;
+
+function loadChainData(): Promise<ChainData> {
+  if (_inflight) return _inflight;
+  _inflight = fetch("/api/yield/chain")
+    .then((r) => r.json() as Promise<ChainData & { error?: string }>)
+    .then((json) => {
+      _inflight = null;
+      if (!json.error) _cache = json;
+      return json as ChainData;
+    })
+    .catch(() => {
+      _inflight = null;
+      return { contractUsdc: 0, contractUsyc: 0, perMarket: [], activity: [] };
+    });
+  return _inflight;
+}
+
 function useChainData(): { data: ChainData | null; loading: boolean } {
-  const [data, setData] = useState<ChainData | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [data, setData] = useState<ChainData | null>(_cache);
+  const [loading, setLoading] = useState(_cache === null);
 
   useEffect(() => {
-    fetch("/api/yield/chain")
-      .then((r) => r.json())
-      .then((json: ChainData & { error?: string }) => {
-        if (!json.error) setData(json);
-      })
-      .catch(() => {})
+    if (_cache) {
+      setData(_cache);
+      setLoading(false);
+      return;
+    }
+    loadChainData()
+      .then(setData)
       .finally(() => setLoading(false));
   }, []);
 
   return { data, loading };
 }
 
+// ─── Top-row metric cards ────────────────────────────────────────────────────
+
 export function YieldChainMetrics() {
   const { data, loading } = useChainData();
+
+  const currentInvestedUsdc =
+    data?.perMarket.reduce((s, m) => s + m.investedPrincipal, 0) ?? 0;
+  const totalYieldEarned =
+    data?.perMarket.reduce((s, m) => s + m.yieldEarned, 0) ?? 0;
 
   return (
     <>
@@ -59,25 +89,19 @@ export function YieldChainMetrics() {
       />
       <ChainMetric
         label="In USYC now"
-        value={
-          data != null
-            ? `$${fmt(data.perMarket.reduce((s, m) => s + m.investedPrincipal, 0))}`
-            : null
-        }
+        value={data != null ? `$${fmt(currentInvestedUsdc)}` : null}
         loading={loading}
       />
       <ChainMetric
         label="Recorded yield"
-        value={
-          data != null
-            ? `$${fmt(data.perMarket.reduce((s, m) => s + m.yieldEarned, 0))}`
-            : null
-        }
+        value={data != null ? `$${fmt(totalYieldEarned)}` : null}
         loading={loading}
       />
     </>
   );
 }
+
+// ─── Agent automation sidebar card ──────────────────────────────────────────
 
 export function YieldAgentCard({
   totalPoolUsdc,
@@ -93,6 +117,7 @@ export function YieldAgentCard({
   const investCapacityUsdc = (totalPoolUsdc * maxInvestedBps) / 10_000;
   const currentInvestedUsdc =
     data?.perMarket.reduce((s, m) => s + m.investedPrincipal, 0) ?? 0;
+  const remainingCap = Math.max(0, investCapacityUsdc - currentInvestedUsdc);
 
   return (
     <div className="border border-white/10 p-5">
@@ -101,51 +126,30 @@ export function YieldAgentCard({
         The GitHub cron calls the agent USYC sweep every 15 minutes. The agent checks open markets,
         skips resolved or empty pools, and invests eligible idle USDC above the configured threshold.
       </p>
-      <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Min idle</p>
-          <p className="mt-1 font-black text-white">${minIdleUsdc}</p>
-        </div>
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Sweep cadence</p>
-          <p className="mt-1 font-black text-white">15 min</p>
-        </div>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Total pool</p>
-          <p className="mt-1 font-black text-white">${fmt(totalPoolUsdc)}</p>
-        </div>
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">
-            Invest cap ({maxInvestedBps / 100}%)
-          </p>
-          <p className="mt-1 font-black text-white">${fmt(investCapacityUsdc)}</p>
-        </div>
-      </div>
-      <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">In USYC now</p>
-          {loading ? (
-            <div className="mt-1 h-6 w-16 animate-pulse rounded bg-white/10" />
-          ) : (
-            <p className="mt-1 font-black text-white">${fmt(currentInvestedUsdc)}</p>
-          )}
-        </div>
-        <div className="border border-white/10 p-3">
-          <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Remaining cap</p>
-          {loading ? (
-            <div className="mt-1 h-6 w-16 animate-pulse rounded bg-white/10" />
-          ) : (
-            <p className="mt-1 font-black text-white">
-              ${fmt(Math.max(0, investCapacityUsdc - currentInvestedUsdc))}
-            </p>
-          )}
-        </div>
-      </div>
+
+      {loading ? (
+        <AgentCardSkeleton />
+      ) : (
+        <>
+          <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
+            <StatCell label="Min idle" value={`$${minIdleUsdc}`} />
+            <StatCell label="Sweep cadence" value="15 min" />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <StatCell label="Total pool" value={`$${fmt(totalPoolUsdc)}`} />
+            <StatCell label={`Invest cap (${maxInvestedBps / 100}%)`} value={`$${fmt(investCapacityUsdc)}`} />
+          </div>
+          <div className="mt-2 grid grid-cols-2 gap-2 text-sm">
+            <StatCell label="In USYC now" value={`$${fmt(currentInvestedUsdc)}`} highlight={currentInvestedUsdc > 0} />
+            <StatCell label="Remaining cap" value={`$${fmt(remainingCap)}`} />
+          </div>
+        </>
+      )}
     </div>
   );
 }
+
+// ─── USYC Activity sidebar card ──────────────────────────────────────────────
 
 export function YieldActivityPanel({
   totalPoolUsdc,
@@ -167,17 +171,14 @@ export function YieldActivityPanel({
           </span>
         )}
       </div>
+
       {loading ? (
-        <div className="mt-3 space-y-2">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="h-20 animate-pulse rounded bg-white/5" />
-          ))}
-        </div>
+        <ActivitySkeleton />
       ) : activity.length === 0 ? (
-        <p className="mt-3 text-sm text-white/55">
+        <p className="mt-3 text-sm leading-relaxed text-white/55">
           {totalPoolUsdc === 0
             ? `No bets placed yet — all market pools are empty. The sweep needs at least $${minIdleUsdc} idle USDC per market before it can invest.`
-            : `Eligible idle exists but no on-chain transactions yet. Check that APP_URL and CRON_SECRET are set as GitHub Actions secrets so the sweep can reach this app.`}
+            : `Eligible idle exists but no on-chain transactions found. Verify that APP_URL and CRON_SECRET are set as GitHub Actions secrets and that the USYC teller is operational on this network.`}
         </p>
       ) : (
         <div className="mt-3 space-y-2">
@@ -223,6 +224,56 @@ export function YieldActivityPanel({
   );
 }
 
+// ─── Skeleton sub-components ─────────────────────────────────────────────────
+
+function AgentCardSkeleton() {
+  return (
+    <div className="mt-4 space-y-2 animate-pulse">
+      <div className="grid grid-cols-2 gap-2">
+        <SkeletonCell />
+        <SkeletonCell />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <SkeletonCell />
+        <SkeletonCell />
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <SkeletonCell />
+        <SkeletonCell />
+      </div>
+    </div>
+  );
+}
+
+function ActivitySkeleton() {
+  return (
+    <div className="mt-3 space-y-3 animate-pulse">
+      {Array.from({ length: 4 }).map((_, i) => (
+        <div key={i} className="space-y-2 border border-white/5 p-3">
+          <div className="flex gap-2">
+            <div className="h-5 w-20 rounded bg-white/10" />
+            <div className="h-5 w-16 rounded bg-white/5" />
+          </div>
+          <div className="h-4 w-full rounded bg-white/8" />
+          <div className="h-4 w-3/4 rounded bg-white/8" />
+          <div className="h-3 w-1/2 rounded bg-white/5" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function SkeletonCell() {
+  return (
+    <div className="border border-white/10 p-3">
+      <div className="h-3 w-16 rounded bg-white/10" />
+      <div className="mt-2 h-6 w-20 rounded bg-white/15" />
+    </div>
+  );
+}
+
+// ─── Shared primitives ───────────────────────────────────────────────────────
+
 function ChainMetric({
   label,
   value,
@@ -236,10 +287,29 @@ function ChainMetric({
     <div className="border border-white/10 p-4">
       <div className="text-xs font-black uppercase tracking-[0.18em] text-white/35">{label}</div>
       {loading ? (
-        <div className="mt-2 h-8 w-24 animate-pulse rounded bg-white/10" />
+        <div className="mt-2 space-y-1.5 animate-pulse">
+          <div className="h-8 w-24 rounded bg-white/10" />
+        </div>
       ) : (
         <div className="mt-2 text-2xl font-black text-white">{value ?? "—"}</div>
       )}
+    </div>
+  );
+}
+
+function StatCell({
+  label,
+  value,
+  highlight = false,
+}: {
+  label: string;
+  value: string;
+  highlight?: boolean;
+}) {
+  return (
+    <div className="border border-white/10 p-3">
+      <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">{label}</p>
+      <p className={`mt-1 font-black ${highlight ? "text-[#2d9d57]" : "text-white"}`}>{value}</p>
     </div>
   );
 }
