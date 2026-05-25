@@ -254,15 +254,19 @@ contract AgbaMarket {
     }
 
     function _callUSYCTeller(uint256 usdcAmount) internal returns (bool) {
+        // ERC-4626: deposit(uint256 assets, address receiver)
         (bool success,) = usycTeller.call(abi.encodeWithSignature("deposit(uint256,address)", usdcAmount, address(this)));
         if (success) return true;
+        // Alternate subscription signature used by some teller wrappers
         (success,) = usycTeller.call(abi.encodeWithSignature("buy(uint256,address)", usdcAmount, address(this)));
         return success;
     }
 
     function _callUSYCRedeem(uint256 shares) internal returns (bool) {
-        (bool success,) = usycTeller.call(abi.encodeWithSignature("redeem(uint256,address)", shares, address(this)));
+        // ERC-4626: redeem(uint256 shares, address receiver, address owner)
+        (bool success,) = usycTeller.call(abi.encodeWithSignature("redeem(uint256,address,address)", shares, address(this), address(this)));
         if (success) return true;
+        // Alternate redemption signature used by some teller wrappers
         (success,) = usycTeller.call(abi.encodeWithSignature("sell(uint256,address)", shares, address(this)));
         return success;
     }
