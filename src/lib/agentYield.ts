@@ -82,16 +82,17 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         continue;
       }
 
-      const tx = await contract.investInUSYC(marketId, investRaw);
+      const investAmountRaw = BigInt(investRaw);
+      const tx = await contract.investInUSYC(marketId, investAmountRaw);
       const receipt = await tx.wait();
       const { error: updateError } = await supabase.from("markets").update({ usyc_invested: true }).eq("id", marketId);
       if (updateError && !isMissingOptionalMarketColumnError(updateError)) throw updateError;
 
       invested += 1;
-      remainingInvestCapacityRaw = investRaw >= remainingInvestCapacityRaw ? BigInt(0) : remainingInvestCapacityRaw - investRaw;
+      remainingInvestCapacityRaw = investAmountRaw >= remainingInvestCapacityRaw ? BigInt(0) : remainingInvestCapacityRaw - investAmountRaw;
       investments.push({
         marketId,
-        investedUsdc: formatUnits(investRaw, 6),
+        investedUsdc: formatUnits(investAmountRaw, 6),
         txHash: receipt?.hash || tx.hash,
       });
 
@@ -99,7 +100,7 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         await supabase.channel("agent_yield").send({
           type: "broadcast",
           event: "invested",
-          payload: { marketId, investedUsdc: formatUnits(investRaw, 6), txHash: receipt?.hash || tx.hash },
+          payload: { marketId, investedUsdc: formatUnits(investAmountRaw, 6), txHash: receipt?.hash || tx.hash },
         });
       }
     } catch (error) {
