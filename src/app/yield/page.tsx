@@ -39,6 +39,10 @@ type YieldState = {
   totalYieldEarned: number;
   markets: YieldMarket[];
   activity: YieldActivity[];
+  asOf: string;
+  marketsLoaded: number;
+  marketsExpected: number;
+  eligibleMarkets: number;
   error: boolean;
 };
 
@@ -60,6 +64,9 @@ export default async function YieldPage() {
     );
   }
 
+  const eligibleMarkets = state.markets.filter((market) => market.eligibleIdle > 0);
+  const otherMarkets = state.markets.filter((market) => market.eligibleIdle <= 0);
+
   return (
     <main className="mx-auto max-w-7xl px-4 py-10">
       <div className="border-b border-white/10 pb-7">
@@ -68,6 +75,9 @@ export default async function YieldPage() {
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white/55">
           This page tracks USDC locked in open prediction markets and the portion the AI agent can move into USYC while the market waits for resolution.
           The agent invests market-scoped idle USDC automatically, and resolution redeems USYC before winner payouts.
+        </p>
+        <p className="mt-3 text-xs text-white/45">
+          As of {new Date(state.asOf).toLocaleString()} · Loaded {state.marketsLoaded}/{state.marketsExpected} markets · Eligible now: {state.eligibleMarkets}
         </p>
       </div>
 
@@ -80,10 +90,10 @@ export default async function YieldPage() {
 
       <section className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
-          <h2 className="font-display text-3xl font-black text-white">Open Market Pools</h2>
+          <h2 className="font-display text-3xl font-black text-white">Eligible Now</h2>
           <div className="mt-4 border-t border-white/10">
-            {state.markets.length === 0 ? <p className="py-8 text-white/45">No open markets with USDC pools yet.</p> : null}
-            {state.markets.map((market) => (
+            {eligibleMarkets.length === 0 ? <p className="py-8 text-white/45">No markets currently above idle threshold.</p> : null}
+            {eligibleMarkets.map((market) => (
               <article key={market.id} className="grid gap-4 border-b border-white/10 py-5 md:grid-cols-[minmax(0,1fr)_180px]">
                 <div>
                   <div className="mb-2 flex flex-wrap gap-2">
@@ -96,6 +106,26 @@ export default async function YieldPage() {
                 <div className="text-sm text-white/55 md:text-right">
                   <p>Pool: ${fmt(market.pool)}</p>
                   <p>Invested: ${fmt(market.investedPrincipal)}</p>
+                  <p>Idle: ${fmt(market.eligibleIdle)}</p>
+                </div>
+              </article>
+            ))}
+          </div>
+
+          <h3 className="mt-8 text-sm font-black uppercase tracking-[0.2em] text-white/45">Other open markets</h3>
+          <div className="mt-3 border-t border-white/10">
+            {otherMarkets.length === 0 ? <p className="py-6 text-white/45">No additional open markets.</p> : null}
+            {otherMarkets.map((market) => (
+              <article key={market.id} className="grid gap-4 border-b border-white/10 py-4 md:grid-cols-[minmax(0,1fr)_180px]">
+                <div>
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    <span className="px-2 py-1 text-xs font-black text-black bg-white/20">#{market.id}</span>
+                    <span className="px-2 py-1 text-xs font-bold text-white/50">{market.category}</span>
+                  </div>
+                  <p className="text-sm font-bold text-white/80">{market.question}</p>
+                </div>
+                <div className="text-xs text-white/50 md:text-right">
+                  <p>Pool: ${fmt(market.pool)}</p>
                   <p>Idle: ${fmt(market.eligibleIdle)}</p>
                 </div>
               </article>
@@ -123,7 +153,9 @@ export default async function YieldPage() {
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
             {state.activity.length === 0 ? (
-              <p className="mt-3 text-sm text-white/55">No confirmed USYC deposit transactions found yet.</p>
+              <p className="mt-3 text-sm text-white/55">
+                No confirmed USYC deposit transactions found yet. This usually means there are no eligible idle balances above the minimum threshold, sweep has not run successfully yet, or cap room is currently full.
+              </p>
             ) : (
               <div className="mt-3 space-y-3">
                 {state.activity.map((item) => (
@@ -175,6 +207,10 @@ async function fetchYieldState(): Promise<YieldState> {
     totalYieldEarned: 0,
     markets: [],
     activity: [],
+    asOf: new Date().toISOString(),
+    marketsLoaded: 0,
+    marketsExpected: 0,
+    eligibleMarkets: 0,
     error: false,
   };
 
@@ -258,6 +294,10 @@ async function fetchYieldState(): Promise<YieldState> {
       totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
       markets: currentMarkets,
       activity,
+      asOf: new Date().toISOString(),
+      marketsLoaded: currentMarkets.length,
+      marketsExpected: rows.length,
+      eligibleMarkets: currentMarkets.filter((market) => market.eligibleIdle > 0).length,
     };
   } catch {
     return { ...baseState, error: true };
