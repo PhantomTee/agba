@@ -107,13 +107,14 @@ export async function POST(request: NextRequest) {
         rejected += 1;
         continue;
       }
+      const normalizedDurationDays = normalizeDurationForContract(decision.durationDays);
       const tx = await contract["createMarket(string,string,string,string,string,uint256,uint256)"](
         decision.question,
         decision.category,
         item.country,
         item.title,
         url,
-        decision.durationDays,
+        normalizedDurationDays,
         decision.initialProbabilityYes,
       );
       const receipt = await tx.wait();
@@ -130,7 +131,7 @@ export async function POST(request: NextRequest) {
         throw new Error("MarketCreated event missing from createMarket transaction");
       }
       const marketId = Number(event.args.marketId);
-      const resolvesAt = new Date(Date.now() + decision.durationDays * 86_400_000).toISOString();
+      const resolvesAt = new Date(Date.now() + normalizedDurationDays * 86_400_000).toISOString();
       const marketPayload = {
         id: marketId,
         question: decision.question,
@@ -215,4 +216,12 @@ async function assertCompatibleMarketContract(contract: ReturnType<typeof getMar
       `Configured NEXT_PUBLIC_CONTRACT_ADDRESS does not support the EURC/USYC market ABI. Update it to the latest deployed AgbaMarket address before scanning.${detail}`,
     );
   }
+}
+
+
+function normalizeDurationForContract(durationDays: number) {
+  if (!Number.isFinite(durationDays)) return 14;
+  if (durationDays <= 10) return 7;
+  if (durationDays <= 22) return 14;
+  return 30;
 }
