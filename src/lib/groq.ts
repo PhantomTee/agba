@@ -34,6 +34,7 @@ DURATION: choose any whole number of days from 1 to 180. Match the number to the
 - 60–90:  Quarterly financial reports, multi-round competitions
 - 90–180: Long-term political outcomes, annual targets, multi-leg deals
 If the article gives an explicit date, compute the exact number of days from today. Never output a value outside 1–180.
+CRITICAL: The number in your question text (e.g. "within 30 days", "by June 15") MUST match your durationDays value exactly. Never write "90 days" in the question if durationDays is 30.
 
 FOREX / CURRENCY - NEVER reject, always find a market:
 - Rate reported (e.g. "Naira at 1590"): ask if it crosses the NEXT round level in 7-14 days. E.g. "Will USD/NGN exceed 1650 by [14 days from now]?"
