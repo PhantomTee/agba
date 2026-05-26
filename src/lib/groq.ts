@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import type { AgentDecision, Category } from "./types";
 import { getEnv } from "./env";
+import type { TavilyResult } from "./tavily";
 
 let groq: Groq | null = null;
 
@@ -147,4 +148,75 @@ function normalizeDurationDays(value: unknown, category: Category): number {
 function defaultDurationForCategory(category: Category): number {
   if (category === "SPORTS" || category === "FOREX" || category === "COMMODITIES") return 14;
   return 30;
+}
+
+export type ResolutionDecision =
+  | { canResolve: true; outcome: boolean; confidence: "high" | "medium"; reasoning: string }
+  | { canResolve: false; reasoning: string };
+
+export async function resolveMarketQuestion(input: {
+  question: string;
+  resolutionCriteria: string;
+  category: string;
+  resolvesAt: string;
+  searchResults: TavilyResult[];
+}): Promise<ResolutionDecision> {
+  const context = input.searchResults.length
+    ? input.searchResults
+        .map((r, i) => `[${i + 1}] ${r.title}\n${r.content}`)
+        .join("\n\n")
+    : "No search results available.";
+
+  const response = await getGroq().chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content: `You are a prediction market resolver. You are given a YES/NO market question, its resolution criteria, and real-time web search results about the topic. Your job is to determine if the question has definitively resolved and if so, what the outcome is.
+
+Rules:
+- Only resolve if you have strong evidence from the search results. Do NOT guess.
+- If the search results are ambiguous, outdated, or unrelated, set canResolve to false.
+- "outcome": true means the question resolved YES. false means NO.
+- confidence "high": multiple corroborating sources or an official announcement. "medium": one clear source.
+- If canResolve is false, explain what information is missing.
+
+Output ONLY valid JSON, no markdown:
+{"canResolve":boolean,"outcome":boolean,"confidence":"high"|"medium"|"low","reasoning":string}`,
+      },
+      {
+        role: "user",
+        content: `Question: ${input.question}
+Category: ${input.category}
+Resolution criteria: ${input.resolutionCriteria}
+Market closed at: ${input.resolvesAt}
+Today's date: ${new Date().toISOString().slice(0, 10)}
+
+Recent web search results:
+${context}`,
+      },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error("Groq returned empty resolution response");
+
+  let parsed: { canResolve?: boolean; outcome?: boolean; confidence?: string; reasoning?: string };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error(`Groq returned invalid JSON for resolution: ${content.slice(0, 200)}`);
+  }
+
+  if (!parsed.canResolve || parsed.confidence === "low") {
+    return { canResolve: false, reasoning: parsed.reasoning || "Insufficient evidence to resolve" };
+  }
+
+  return {
+    canResolve: true,
+    outcome: Boolean(parsed.outcome),
+    confidence: parsed.confidence === "high" ? "high" : "medium",
+    reasoning: String(parsed.reasoning || ""),
+  };
 }
