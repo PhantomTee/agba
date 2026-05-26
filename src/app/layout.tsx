@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Suspense } from "react";
 import { Providers } from "@/components/Providers";
 import { Header } from "@/components/Header";
+import { IntroWrapper } from "@/components/IntroWrapper";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -37,10 +38,12 @@ export default function RootLayout({
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-background text-white">
         <Providers>
-          <Suspense fallback={<div className="border-b border-white/10 bg-background px-4 py-4 text-[#f5a623]">Àgbà</div>}>
-            <Header />
-          </Suspense>
-          {children}
+          <IntroWrapper>
+            <Suspense fallback={<div className="border-b border-white/10 bg-background px-4 py-4 text-[#f5a623]">Àgbà</div>}>
+              <Header />
+            </Suspense>
+            {children}
+          </IntroWrapper>
         </Providers>
       </body>
     </html>
