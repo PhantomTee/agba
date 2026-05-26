@@ -69,17 +69,19 @@ export function GlobePreloader({ onComplete }: { onComplete: () => void }) {
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    const safeCanvas = canvas!;
 
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     const size = Math.min(window.innerWidth * 0.72, window.innerHeight * 0.72, 520);
-    canvas.width = size * dpr;
-    canvas.height = size * dpr;
-    canvas.style.width = `${size}px`;
-    canvas.style.height = `${size}px`;
+    safeCanvas.width = size * dpr;
+    safeCanvas.height = size * dpr;
+    safeCanvas.style.width = `${size}px`;
+    safeCanvas.style.height = `${size}px`;
 
-    const ctx = canvas.getContext("2d")!;
-    const cx = canvas.width / 2;
-    const cy = canvas.height / 2;
+    const ctx = safeCanvas.getContext("2d")!;
+    const cx = safeCanvas.width / 2;
+    const cy = safeCanvas.height / 2;
     const R = cx * 0.9;
     const dotR = Math.max(2, R / 100) * dpr;
 
@@ -159,7 +161,7 @@ export function GlobePreloader({ onComplete }: { onComplete: () => void }) {
       setFlashAlpha(fa);
 
       // Render globe on canvas
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.clearRect(0, 0, safeCanvas.width, safeCanvas.height);
 
       // Globe edge
       ctx.beginPath();
