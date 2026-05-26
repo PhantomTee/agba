@@ -207,42 +207,41 @@ export function GlobePreloader({ onComplete }: { onComplete: () => void }) {
   if (phase === "done") return null;
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-[#0a0a0a]">
+    <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center overflow-hidden bg-[#0a0a0a]">
       {/* Globe with CSS zoom */}
       <div
         style={{
           transform: `scale(${cssScale})`,
           transformOrigin: "50% 46%",
           willChange: "transform",
+          flexShrink: 0,
         }}
       >
         <canvas ref={canvasRef} />
       </div>
 
-      {/* Label */}
-      {label && (
-        <div
-          className="absolute bottom-10 text-center"
-          style={{ opacity: phase === "zoom" ? 0 : 1, transition: "opacity 0.3s" }}
-        >
-          <p className="text-[10px] font-black uppercase tracking-[0.35em] text-white/35">
-            {label}
-          </p>
-        </div>
-      )}
-
-      {/* Wordmark */}
+      {/* Wordmark — top */}
       <div
-        className="absolute top-10 text-center"
+        className="absolute top-8 left-0 right-0 text-center"
         style={{ opacity: phase === "zoom" || phase === "flash" ? 0 : 1, transition: "opacity 0.4s" }}
       >
-        <p className="font-display text-2xl font-black tracking-widest text-[#f5a623]">ÀGBÀ</p>
+        <p className="font-display text-xl font-black tracking-widest text-[#f5a623] sm:text-2xl">ÀGBÀ</p>
+      </div>
+
+      {/* Label — bottom */}
+      <div
+        className="absolute bottom-8 left-0 right-0 text-center"
+        style={{ opacity: phase === "zoom" || phase === "flash" ? 0 : 1, transition: "opacity 0.3s" }}
+      >
+        <p className="text-[9px] font-black uppercase tracking-[0.3em] text-white/35 sm:text-[10px]">
+          {label}
+        </p>
       </div>
 
       {/* Orange flash overlay */}
       <div
         className="pointer-events-none fixed inset-0 z-[101]"
-        style={{ backgroundColor: "#f5a623", opacity: flashAlpha, transition: "opacity 0.05s" }}
+        style={{ backgroundColor: "#f5a623", opacity: flashAlpha }}
       />
     </div>
   );
