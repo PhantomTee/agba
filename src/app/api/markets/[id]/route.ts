@@ -159,7 +159,7 @@ async function fetchChainBets(marketId: number): Promise<Bet[]> {
 }
 
 function isBetEvent(log: Log | EventLog): log is EventLog {
-  return log instanceof EventLog && log.eventName === "Bet";
+  return log instanceof EventLog && (log.eventName === "Bet" || log.eventName === "EURCBet");
 }
 
 function mergeBetHistory(databaseBets: Bet[], chainBets: Bet[]) {

@@ -65,8 +65,11 @@ async function fetchWalletChainPredictions(wallet: string, limit: number): Promi
 
   for (let fromBlock = startBlock; fromBlock <= latestBlock; fromBlock += blockRange + 1) {
     const toBlock = Math.min(latestBlock, fromBlock + blockRange);
-    const betLogs = await contract.queryFilter(contract.filters.Bet(null, wallet), fromBlock, toBlock);
-    logs.push(...betLogs);
+    const [usdcLogs, eurcLogs] = await Promise.all([
+      contract.queryFilter(contract.filters.Bet(null, wallet), fromBlock, toBlock),
+      contract.queryFilter(contract.filters.EURCBet(null, wallet), fromBlock, toBlock),
+    ]);
+    logs.push(...usdcLogs, ...eurcLogs);
   }
 
   const betLogs = logs.filter(isBetEvent);
@@ -85,7 +88,7 @@ async function fetchWalletChainPredictions(wallet: string, limit: number): Promi
       wallet_address: String(log.args.bettor),
       side: Boolean(log.args.yes),
       amount_usdc: Number(formatUnits(log.args.amount, 6)),
-      currency: "USDC" as const,
+      currency: (log.eventName === "EURCBet" ? "EURC" : "USDC") as "USDC" | "EURC",
       tx_hash: log.transactionHash,
       created_at: blockTimes.get(log.blockNumber) || new Date(0).toISOString(),
       markets: null,
@@ -136,7 +139,7 @@ async function hydrateMarkets(
 }
 
 function isBetEvent(log: Log | EventLog): log is EventLog {
-  return log instanceof EventLog && log.eventName === "Bet";
+  return log instanceof EventLog && (log.eventName === "Bet" || log.eventName === "EURCBet");
 }
 
 function mergeActivity(databasePredictions: PredictionActivity[], chainPredictions: PredictionActivity[]) {
