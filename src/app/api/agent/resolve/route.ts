@@ -3,7 +3,9 @@ import { formatUnits } from "ethers";
 import { assertCronRequest } from "@/lib/auth";
 import { getMarketContract } from "@/lib/chain";
 import { getEnv, getOptionalEnv } from "@/lib/env";
+import { resolveMarketQuestion } from "@/lib/groq";
 import { getSupabaseAdmin } from "@/lib/supabase";
+import { tavilySearch } from "@/lib/tavily";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -45,8 +47,27 @@ export async function POST(request: NextRequest) {
           pending += 1;
         }
       } else {
-        await queueManualResolution(Number(market.id), market.question);
-        pending += 1;
+        try {
+          const searchQuery = buildSearchQuery(market.question, market.category, market.resolves_at);
+          const searchResults = await tavilySearch(searchQuery, 5);
+          const decision = await resolveMarketQuestion({
+            question: market.question,
+            resolutionCriteria: market.resolution_criteria || market.question,
+            category: market.category,
+            resolvesAt: market.resolves_at || new Date().toISOString(),
+            searchResults,
+          });
+          if (decision.canResolve) {
+            await resolveOnchainAndDb(Number(market.id), decision.outcome, decision.reasoning);
+            resolved += 1;
+          } else {
+            await queueManualResolution(Number(market.id), market.question);
+            pending += 1;
+          }
+        } catch {
+          await queueManualResolution(Number(market.id), market.question);
+          pending += 1;
+        }
       }
     }
     return NextResponse.json({ checked: markets?.length || 0, resolved, pending });
@@ -151,4 +172,20 @@ async function queueManualResolution(marketId: number, question: string) {
   const { error: pendingError } = await supabase.from("pending_resolution").insert({ market_id: marketId });
   if (pendingError && pendingError.code !== "23505") throw pendingError;
   await notifyManualResolution(marketId, question);
+}
+
+function buildSearchQuery(question: string, category: string, resolvesAt: string | null): string {
+  const year = resolvesAt ? new Date(resolvesAt).getFullYear() : new Date().getFullYear();
+  const month = resolvesAt
+    ? new Date(resolvesAt).toLocaleString("en-US", { month: "long" })
+    : new Date().toLocaleString("en-US", { month: "long" });
+  const categoryHints: Record<string, string> = {
+    ECONOMY: "Nigeria economy official result",
+    POLITICS: "Nigeria politics official announcement",
+    TECH: "Nigeria tech announcement result",
+    SECURITY: "Nigeria security official statement",
+    COMMODITIES: "commodity price result",
+  };
+  const hint = categoryHints[category] || "Nigeria Africa result";
+  return `${question} ${hint} ${month} ${year}`;
 }

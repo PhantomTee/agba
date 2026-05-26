@@ -1,8 +1,5 @@
-import { Contract, formatUnits } from "ethers";
 import type { Metadata } from "next";
-import { getArcProvider, getReadOnlyMarketContract, getReadOnlyUsdcContract } from "@/lib/chain";
-import { ERC20_ABI } from "@/lib/constants";
-import { getEnv } from "@/lib/env";
+import { YieldChainMetrics, YieldAgentCard, YieldActivityPanel } from "@/components/YieldChainPanel";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const metadata: Metadata = {
@@ -17,56 +14,22 @@ type YieldMarket = {
   question: string;
   category: string;
   pool: number;
-  investedPrincipal: number;
-  usycShares: number;
-  yieldEarned: number;
-  resolved: boolean;
-  eligibleIdle: number;
-};
-
-type YieldActivity = {
-  marketId: number;
-  usdcAmount: number;
-  txHash: string;
-  status: "confirmed";
 };
 
 type YieldState = {
-  contractUsdc: number;
-  contractUsyc: number;
   minIdleUsdc: string;
-  totalEligibleIdle: number;
-  eligibleIdleReady: boolean;
-  totalYieldEarned: number;
+  maxInvestedBps: number;
+  totalPoolUsdc: number;
+  eligibleCount: number;
   markets: YieldMarket[];
-  activity: YieldActivity[];
   asOf: string;
-  marketsLoaded: number;
-  marketsExpected: number;
-  eligibleMarkets: number;
-  error: boolean;
 };
 
 export default async function YieldPage() {
   const state = await fetchYieldState();
-
-  if (state.error) {
-    return (
-      <main className="mx-auto max-w-4xl px-4 py-10">
-        <div className="border border-red-500/30 bg-red-500/10 p-6">
-          <p className="text-xs font-black uppercase tracking-[0.28em] text-red-300">Yield unavailable</p>
-          <h1 className="mt-2 font-display text-4xl font-black text-white">USYC Yield</h1>
-          <p className="mt-4 text-sm leading-relaxed text-white/75">
-            The yield dashboard could not load right now because required configuration or backend services are unavailable.
-            This is temporary once environment variables and upstream services are healthy.
-          </p>
-        </div>
-      </main>
-    );
-  }
-
-  const eligibleMarkets = state.markets.filter((market) => market.eligibleIdle > 0);
-  const otherMarkets = state.markets.filter((market) => market.eligibleIdle <= 0);
+  const minIdle = Number(state.minIdleUsdc);
+  const eligibleMarkets = state.markets.filter((m) => m.pool >= minIdle);
+  const otherMarkets = state.markets.filter((m) => m.pool < minIdle);
 
   return (
     <main className="mx-auto max-w-7xl px-4 py-10">
@@ -74,43 +37,42 @@ export default async function YieldPage() {
         <p className="text-xs font-black uppercase tracking-[0.28em] text-[#f5a623]">Treasury operations</p>
         <h1 className="mt-2 font-display text-5xl font-black leading-none text-white md:text-7xl">USYC Yield</h1>
         <p className="mt-4 max-w-3xl text-sm leading-relaxed text-white/55">
-          This page tracks USDC locked in open prediction markets and the portion the AI agent can move into USYC while the market waits for resolution.
-          The agent invests market-scoped idle USDC automatically, and resolution redeems USYC before winner payouts.
+          This page tracks USDC locked in open prediction markets and the portion the AI agent can move into USYC while
+          the market waits for resolution. The agent invests market-scoped idle USDC automatically, and resolution
+          redeems USYC before winner payouts.
         </p>
         <p className="mt-3 text-xs text-white/45">
-          As of {new Date(state.asOf).toLocaleString()} · Loaded {state.marketsLoaded}/{state.marketsExpected} markets · Eligible now: {state.eligibleMarkets}
+          As of {new Date(state.asOf).toLocaleString()} · {state.markets.length} open markets · $
+          {fmt(state.totalPoolUsdc)} total pool · {state.eligibleCount} eligible now
         </p>
       </div>
 
+      {/* Top metrics — chain data loaded async by client component */}
       <section className="mt-8 grid gap-3 md:grid-cols-4">
-        <Metric label="Contract USDC" value={`$${fmt(state.contractUsdc)}`} />
-        <Metric label="Contract USYC" value={fmt(state.contractUsyc)} />
-        <Metric
-          label="Eligible idle USDC"
-          value={state.eligibleIdleReady ? `$${fmt(state.totalEligibleIdle)}` : "Calculating..."}
-        />
-        <Metric label="Recorded yield" value={`$${fmt(state.totalYieldEarned)}`} />
+        <YieldChainMetrics />
       </section>
 
       <section className="mt-10 grid gap-8 lg:grid-cols-[minmax(0,1fr)_360px]">
         <div>
           <h2 className="font-display text-3xl font-black text-white">Eligible Now</h2>
           <div className="mt-4 border-t border-white/10">
-            {eligibleMarkets.length === 0 ? <p className="py-8 text-white/45">No markets currently above idle threshold.</p> : null}
+            {eligibleMarkets.length === 0 ? (
+              <p className="py-8 text-white/45">No markets currently above idle threshold.</p>
+            ) : null}
             {eligibleMarkets.map((market) => (
-              <article key={market.id} className="grid gap-4 border-b border-white/10 py-5 md:grid-cols-[minmax(0,1fr)_180px]">
+              <article
+                key={market.id}
+                className="grid gap-4 border-b border-white/10 py-5 md:grid-cols-[minmax(0,1fr)_180px]"
+              >
                 <div>
                   <div className="mb-2 flex flex-wrap gap-2">
-                    <span className="px-2 py-1 text-xs font-black text-black bg-[#f5a623]">#{market.id}</span>
+                    <span className="bg-[#f5a623] px-2 py-1 text-xs font-black text-black">#{market.id}</span>
                     <span className="px-2 py-1 text-xs font-bold text-white/50">{market.category}</span>
-                    {market.usycShares > 0 && <span className="px-2 py-1 text-xs font-black text-white bg-[#2d6a4f]">USYC active</span>}
                   </div>
                   <p className="font-bold text-white">{market.question}</p>
                 </div>
                 <div className="text-sm text-white/55 md:text-right">
                   <p>Pool: ${fmt(market.pool)}</p>
-                  <p>Invested: ${fmt(market.investedPrincipal)}</p>
-                  <p>Idle: ${fmt(market.eligibleIdle)}</p>
                 </div>
               </article>
             ))}
@@ -118,19 +80,23 @@ export default async function YieldPage() {
 
           <h3 className="mt-8 text-sm font-black uppercase tracking-[0.2em] text-white/45">Other open markets</h3>
           <div className="mt-3 border-t border-white/10">
-            {otherMarkets.length === 0 ? <p className="py-6 text-white/45">No additional open markets.</p> : null}
+            {otherMarkets.length === 0 ? (
+              <p className="py-6 text-white/45">No additional open markets.</p>
+            ) : null}
             {otherMarkets.map((market) => (
-              <article key={market.id} className="grid gap-4 border-b border-white/10 py-4 md:grid-cols-[minmax(0,1fr)_180px]">
+              <article
+                key={market.id}
+                className="grid gap-4 border-b border-white/10 py-4 md:grid-cols-[minmax(0,1fr)_180px]"
+              >
                 <div>
                   <div className="mb-2 flex flex-wrap gap-2">
-                    <span className="px-2 py-1 text-xs font-black text-black bg-white/20">#{market.id}</span>
+                    <span className="bg-white/20 px-2 py-1 text-xs font-black">#{market.id}</span>
                     <span className="px-2 py-1 text-xs font-bold text-white/50">{market.category}</span>
                   </div>
                   <p className="text-sm font-bold text-white/80">{market.question}</p>
                 </div>
                 <div className="text-xs text-white/50 md:text-right">
                   <p>Pool: ${fmt(market.pool)}</p>
-                  <p>Idle: ${fmt(market.eligibleIdle)}</p>
                 </div>
               </article>
             ))}
@@ -138,47 +104,18 @@ export default async function YieldPage() {
         </div>
 
         <aside className="space-y-4">
-          <div className="border border-white/10 p-5">
-            <h2 className="font-display text-2xl font-black text-[#f5a623]">Agent automation</h2>
-            <p className="mt-3 text-sm leading-relaxed text-white/60">
-              The GitHub cron calls the agent USYC sweep every 15 minutes. The agent checks open markets, skips resolved or empty pools, and invests eligible idle USDC above the configured threshold.
-            </p>
-            <div className="mt-4 grid grid-cols-2 gap-2 text-sm">
-              <div className="border border-white/10 p-3">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Min idle</p>
-                <p className="mt-1 font-black text-white">${state.minIdleUsdc}</p>
-              </div>
-              <div className="border border-white/10 p-3">
-                <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Sweep cadence</p>
-                <p className="mt-1 font-black text-white">15 min</p>
-              </div>
-            </div>
-          </div>
-          <div className="border border-white/10 p-5">
-            <h2 className="font-display text-2xl font-black text-[#f5a623]">Recent USYC deposits</h2>
-            {state.activity.length === 0 ? (
-              <p className="mt-3 text-sm text-white/55">
-                No confirmed USYC deposit transactions found yet. This usually means there are no eligible idle balances above the minimum threshold, sweep has not run successfully yet, or cap room is currently full.
-              </p>
-            ) : (
-              <div className="mt-3 space-y-3">
-                {state.activity.map((item) => (
-                  <div key={`${item.txHash}-${item.marketId}`} className="border border-white/10 p-3">
-                    <p className="text-xs font-black uppercase tracking-[0.16em] text-white/35">Market #{item.marketId}</p>
-                    <p className="mt-1 text-sm font-bold text-white">{fmt(item.usdcAmount)} USDC invested</p>
-                    <p className="mt-1 text-xs text-[#2d6a4f]">Status: {item.status}</p>
-                    <p className="mt-1 break-all text-xs text-white/45">Tx: {item.txHash}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
+          <YieldAgentCard
+            totalPoolUsdc={state.totalPoolUsdc}
+            minIdleUsdc={state.minIdleUsdc}
+            maxInvestedBps={state.maxInvestedBps}
+          />
+          <YieldActivityPanel totalPoolUsdc={state.totalPoolUsdc} minIdleUsdc={state.minIdleUsdc} />
           <div className="border border-white/10 p-5">
             <h2 className="font-display text-2xl font-black text-[#f5a623]">Integration model</h2>
             <p className="mt-3 text-sm leading-relaxed text-white/60">
-              USYC is a tokenized money market fund. Circle documents USYC subscription and redemption through USDC, automatic yield through a rising token price,
-              and eligibility restrictions. The safe Agba model is market-scoped: invest only locked pool USDC, redeem during resolution, then distribute yield to winners.
+              USYC is a tokenized money market fund. Circle documents USYC subscription and redemption through USDC,
+              automatic yield through a rising token price, and eligibility restrictions. The safe Agba model is
+              market-scoped: invest only locked pool USDC, redeem during resolution, then distribute yield to winners.
             </p>
           </div>
           <div className="border border-white/10 p-5">
@@ -191,10 +128,18 @@ export default async function YieldPage() {
             </ul>
           </div>
           <div className="border border-white/10 p-5 text-sm text-white/50">
-            <a href="https://developers.circle.com/tokenized/usyc/overview" target="_blank" rel="noreferrer" className="font-bold text-[#f5a623] hover:underline">
+            <a
+              href="https://developers.circle.com/tokenized/usyc/overview"
+              target="_blank"
+              rel="noreferrer"
+              className="font-bold text-[#f5a623] hover:underline"
+            >
               Circle USYC docs
             </a>
-            <p className="mt-2">Review eligibility, settlement, redemption, and operational constraints before enabling automated investment.</p>
+            <p className="mt-2">
+              Review eligibility, settlement, redemption, and operational constraints before enabling automated
+              investment.
+            </p>
           </div>
         </aside>
       </section>
@@ -203,120 +148,51 @@ export default async function YieldPage() {
 }
 
 async function fetchYieldState(): Promise<YieldState> {
-  const baseState: YieldState = {
-    contractUsdc: 0,
-    contractUsyc: 0,
-    minIdleUsdc: process.env.AGENT_USYC_MIN_IDLE_USDC || "1",
-    totalEligibleIdle: 0,
-    eligibleIdleReady: false,
-    totalYieldEarned: 0,
-    markets: [],
-    activity: [],
-    asOf: new Date().toISOString(),
-    marketsLoaded: 0,
-    marketsExpected: 0,
-    eligibleMarkets: 0,
-    error: false,
-  };
-
-  let usycAddress = "";
-  let contractAddress = "";
-  try {
-    usycAddress = getEnv("NEXT_PUBLIC_USYC_ADDRESS");
-    contractAddress = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
-  } catch {
-    return { ...baseState, eligibleIdleReady: false, error: true };
-  }
+  const minIdleUsdc = process.env.AGENT_USYC_MIN_IDLE_USDC || "1";
+  const maxInvestedBps = Math.min(
+    9000,
+    Math.max(1000, Number(process.env.AGENT_USYC_MAX_INVESTED_BPS || "7000"))
+  );
 
   try {
     const supabase = getSupabaseAdmin();
-    const contract = getReadOnlyMarketContract();
-    const provider = getArcProvider();
-    const usdc = getReadOnlyUsdcContract();
-    const usyc = new Contract(usycAddress, ERC20_ABI, provider);
-    let depositLogs: Array<{ args?: { marketId?: bigint; usdcAmount?: bigint }; transactionHash: string }> = [];
-    try {
-      const latestBlock = await provider.getBlockNumber();
-      const fromBlock = Math.max(0, latestBlock - 1200);
-      depositLogs = (await contract.queryFilter(contract.filters.MarketUSYCInvested(), fromBlock, latestBlock)) as typeof depositLogs;
-    } catch {
-      depositLogs = [];
-    }
-    const [{ data: dbMarkets }, marketCount, contractUsdcRaw, contractUsycRaw] = await Promise.all([
-      supabase.from("markets").select("id,question,category").eq("resolved", false).order("created_at", { ascending: false }).limit(100),
-      contract.marketCount().then((count: bigint) => Number(count)),
-      usdc.balanceOf(contractAddress),
-      usyc.balanceOf(contractAddress),
-    ]);
+    const { data, error } = await supabase
+      .from("markets")
+      .select("id,question,category,yes_pool,no_pool")
+      .eq("resolved", false)
+      .order("created_at", { ascending: false })
+      .limit(100);
 
-    const rows = (dbMarkets || []).filter((market) => Number(market.id) <= marketCount);
-    const markets = await Promise.all(
-      rows.map(async (market) => {
-        try {
-          const [onchain, usycSharesRaw, yieldRaw, principalRaw] = await Promise.all([
-            contract.getMarket(Number(market.id)),
-            contract.getMarketUSYCBalance(Number(market.id)),
-            contract.getMarketYieldEarned(Number(market.id)),
-            contract.marketUsycPrincipal(Number(market.id)).catch(() => BigInt(0)),
-          ]);
-          if (Number(onchain.id) === 0) return null;
-          const pool = Number(formatUnits(onchain.yesPool + onchain.noPool, 6));
-          const investedPrincipal = Number(formatUnits(principalRaw, 6));
-          return {
-            id: Number(onchain.id),
-            question: onchain.question || market.question,
-            category: onchain.category || market.category,
-            pool,
-            investedPrincipal,
-            usycShares: Number(formatUnits(usycSharesRaw, 6)),
-            yieldEarned: Number(formatUnits(yieldRaw, 6)),
-            resolved: onchain.resolved,
-            eligibleIdle: onchain.resolved ? 0 : Math.max(0, pool - investedPrincipal),
-          };
-        } catch {
-          return null;
-        }
-      }),
-    );
+    if (error) throw error;
 
-    const currentMarkets = markets.filter((market): market is YieldMarket => market !== null);
-    const activity = depositLogs
-      .slice(-10)
-      .reverse()
-      .map((log) => ({
-        marketId: Number(log.args?.marketId || 0),
-        usdcAmount: Number(formatUnits(log.args?.usdcAmount || BigInt(0), 6)),
-        txHash: log.transactionHash,
-        status: "confirmed" as const,
-      }))
-      .filter((item) => item.marketId > 0);
+    const markets: YieldMarket[] = (data || []).map((m) => ({
+      id: Number(m.id),
+      question: String(m.question),
+      category: String(m.category),
+      pool: Number(m.yes_pool || 0) + Number(m.no_pool || 0),
+    }));
+
+    const totalPoolUsdc = markets.reduce((sum, m) => sum + m.pool, 0);
+    const minIdle = Number(minIdleUsdc);
 
     return {
-      ...baseState,
-      contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),
-      contractUsyc: Number(formatUnits(contractUsycRaw, 6)),
-      totalEligibleIdle: currentMarkets.reduce((sum, market) => sum + market.eligibleIdle, 0),
-      eligibleIdleReady: true,
-      totalYieldEarned: currentMarkets.reduce((sum, market) => sum + market.yieldEarned, 0),
-      markets: currentMarkets,
-      activity,
+      minIdleUsdc,
+      maxInvestedBps,
+      totalPoolUsdc,
+      eligibleCount: markets.filter((m) => m.pool >= minIdle).length,
+      markets,
       asOf: new Date().toISOString(),
-      marketsLoaded: currentMarkets.length,
-      marketsExpected: rows.length,
-      eligibleMarkets: currentMarkets.filter((market) => market.eligibleIdle > 0).length,
     };
   } catch {
-    return { ...baseState, eligibleIdleReady: false, error: true };
+    return {
+      minIdleUsdc,
+      maxInvestedBps,
+      totalPoolUsdc: 0,
+      eligibleCount: 0,
+      markets: [],
+      asOf: new Date().toISOString(),
+    };
   }
-}
-
-function Metric({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="border border-white/10 p-4">
-      <div className="text-xs font-black uppercase tracking-[0.18em] text-white/35">{label}</div>
-      <div className="mt-2 text-2xl font-black text-white">{value}</div>
-    </div>
-  );
 }
 
 function fmt(value: number) {

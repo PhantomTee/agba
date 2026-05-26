@@ -38,7 +38,6 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
 
   for (const row of dbMarkets || []) {
     const marketId = Number(row.id);
-    console.log("[agentYield] checking market", { marketId });
     if (!Number.isInteger(marketId) || marketId <= 0 || marketId > marketCount) continue;
     try {
       const [market, principalRaw] = await Promise.all([
@@ -46,8 +45,10 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         contract.marketUsycPrincipal(marketId).catch(() => BigInt(0)),
       ]);
       if (Number(market.id) === 0 || market.resolved) continue;
-      totalOpenPoolRaw += market.yesPool + market.noPool;
-      totalPrincipalRaw += principalRaw;
+      const yesPool = BigInt(market.yesPool ?? 0);
+      const noPool = BigInt(market.noPool ?? 0);
+      totalOpenPoolRaw += yesPool + noPool;
+      totalPrincipalRaw += BigInt(principalRaw ?? 0);
     } catch {
       continue;
     }
@@ -55,6 +56,14 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
 
   const maxInvestedRaw = (totalOpenPoolRaw * BigInt(cappedMaxInvestedBps)) / BigInt(10_000);
   let remainingInvestCapacityRaw = maxInvestedRaw > totalPrincipalRaw ? maxInvestedRaw - totalPrincipalRaw : BigInt(0);
+
+  console.log("[agentYield] capacity computed", {
+    totalPoolUsdc: formatUnits(totalOpenPoolRaw, 6),
+    maxInvestedBps: cappedMaxInvestedBps,
+    investCapacityUsdc: formatUnits(maxInvestedRaw, 6),
+    alreadyInvestedUsdc: formatUnits(totalPrincipalRaw, 6),
+    remainingCapacityUsdc: formatUnits(remainingInvestCapacityRaw, 6),
+  });
 
   for (const row of dbMarkets || []) {
     if (invested >= maxMarkets || remainingInvestCapacityRaw === BigInt(0)) break;
@@ -79,8 +88,9 @@ export async function runAgentUSYCSweep(options: AgentYieldSweepOptions = {}) {
         continue;
       }
 
-      const poolRaw = market.yesPool + market.noPool;
-      const availableRaw = poolRaw > principalRaw ? poolRaw - principalRaw : BigInt(0);
+      const poolRaw = BigInt(market.yesPool ?? 0) + BigInt(market.noPool ?? 0);
+      const principalBig = BigInt(principalRaw ?? 0);
+      const availableRaw = poolRaw > principalBig ? poolRaw - principalBig : BigInt(0);
       if (availableRaw < minIdleRaw) {
         console.log("[agentYield] skipped below min idle", {
           marketId,

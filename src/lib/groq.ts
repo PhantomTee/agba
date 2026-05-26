@@ -1,6 +1,7 @@
 import Groq from "groq-sdk";
 import type { AgentDecision, Category } from "./types";
 import { getEnv } from "./env";
+import type { TavilyResult } from "./tavily";
 
 let groq: Groq | null = null;
 
@@ -23,7 +24,17 @@ export async function analyzeNewsForMarket(input: {
     messages: [
       {
         role: "system",
-        content: `You are a prediction market designer for African news. Turn every article into a sharp forward-looking binary YES/NO question resolving in a realistic window based on the underlying event, usually between 7 and 180 days. The article is your trigger, not your constraint - always look for the NEXT uncertain outcome it implies.
+        content: `You are a prediction market designer for African news. Turn every article into a sharp forward-looking binary YES/NO question. The article is your trigger, not your constraint - always look for the NEXT uncertain outcome it implies.
+
+DURATION: choose any whole number of days from 1 to 180. Match the number to the genuine natural deadline the article implies — do NOT round to arbitrary milestones.
+- 1–7:    Breaking news, next-day fixtures, 48–72 h rate checks
+- 7–14:   Weekly data releases, imminent fixtures, short FX windows
+- 14–30:  Monthly indicators (CPI, MPC, NGX ASI), near-term policy votes
+- 30–60:  Parliamentary bills, court rulings, election campaigns
+- 60–90:  Quarterly financial reports, multi-round competitions
+- 90–180: Long-term political outcomes, annual targets, multi-leg deals
+If the article gives an explicit date, compute the exact number of days from today. Never output a value outside 1–180.
+CRITICAL: The number in your question text (e.g. "within 30 days", "by June 15") MUST match your durationDays value exactly. Never write "90 days" in the question if durationDays is 30.
 
 FOREX / CURRENCY - NEVER reject, always find a market:
 - Rate reported (e.g. "Naira at 1590"): ask if it crosses the NEXT round level in 7-14 days. E.g. "Will USD/NGN exceed 1650 by [14 days from now]?"
@@ -129,15 +140,84 @@ function normalizeInitialProbability(value: unknown) {
 }
 
 
-function normalizeDurationDays(value: unknown, category: Category) {
-  const parsedDays = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(parsedDays)) return defaultDurationForCategory(category);
-  return Math.min(180, Math.max(7, Math.round(parsedDays)));
+function normalizeDurationDays(value: unknown, category: Category): number {
+  const days = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(days) || days <= 0) return defaultDurationForCategory(category);
+  return Math.min(180, Math.max(1, Math.round(days)));
 }
 
-function defaultDurationForCategory(category: Category) {
-  if (category === "SPORTS") return 14;
-  if (category === "FOREX" || category === "COMMODITIES") return 14;
-  if (category === "POLITICS" || category === "ECONOMY" || category === "TECH" || category === "SECURITY") return 30;
-  return 21;
+function defaultDurationForCategory(category: Category): number {
+  if (category === "SPORTS" || category === "FOREX" || category === "COMMODITIES") return 14;
+  return 30;
+}
+
+export type ResolutionDecision =
+  | { canResolve: true; outcome: boolean; confidence: "high" | "medium"; reasoning: string }
+  | { canResolve: false; reasoning: string };
+
+export async function resolveMarketQuestion(input: {
+  question: string;
+  resolutionCriteria: string;
+  category: string;
+  resolvesAt: string;
+  searchResults: TavilyResult[];
+}): Promise<ResolutionDecision> {
+  const context = input.searchResults.length
+    ? input.searchResults
+        .map((r, i) => `[${i + 1}] ${r.title}\n${r.content}`)
+        .join("\n\n")
+    : "No search results available.";
+
+  const response = await getGroq().chat.completions.create({
+    model: "llama-3.3-70b-versatile",
+    temperature: 0.1,
+    messages: [
+      {
+        role: "system",
+        content: `You are a prediction market resolver. You are given a YES/NO market question, its resolution criteria, and real-time web search results about the topic. Your job is to determine if the question has definitively resolved and if so, what the outcome is.
+
+Rules:
+- Only resolve if you have strong evidence from the search results. Do NOT guess.
+- If the search results are ambiguous, outdated, or unrelated, set canResolve to false.
+- "outcome": true means the question resolved YES. false means NO.
+- confidence "high": multiple corroborating sources or an official announcement. "medium": one clear source.
+- If canResolve is false, explain what information is missing.
+
+Output ONLY valid JSON, no markdown:
+{"canResolve":boolean,"outcome":boolean,"confidence":"high"|"medium"|"low","reasoning":string}`,
+      },
+      {
+        role: "user",
+        content: `Question: ${input.question}
+Category: ${input.category}
+Resolution criteria: ${input.resolutionCriteria}
+Market closed at: ${input.resolvesAt}
+Today's date: ${new Date().toISOString().slice(0, 10)}
+
+Recent web search results:
+${context}`,
+      },
+    ],
+  });
+
+  const content = response.choices[0]?.message?.content;
+  if (!content) throw new Error("Groq returned empty resolution response");
+
+  let parsed: { canResolve?: boolean; outcome?: boolean; confidence?: string; reasoning?: string };
+  try {
+    parsed = JSON.parse(content);
+  } catch {
+    throw new Error(`Groq returned invalid JSON for resolution: ${content.slice(0, 200)}`);
+  }
+
+  if (!parsed.canResolve || parsed.confidence === "low") {
+    return { canResolve: false, reasoning: parsed.reasoning || "Insufficient evidence to resolve" };
+  }
+
+  return {
+    canResolve: true,
+    outcome: Boolean(parsed.outcome),
+    confidence: parsed.confidence === "high" ? "high" : "medium",
+    reasoning: String(parsed.reasoning || ""),
+  };
 }

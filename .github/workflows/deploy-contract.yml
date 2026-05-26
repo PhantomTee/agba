@@ -1,0 +1,29 @@
+name: Deploy Contract
+
+on:
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    name: Deploy AgbaMarket
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Deploy AgbaMarket contract
+        env:
+          AGENT_PRIVATE_KEY: ${{ secrets.AGENT_PRIVATE_KEY }}
+          NEXT_PUBLIC_ARC_RPC: ${{ secrets.NEXT_PUBLIC_ARC_RPC }}
+          NEXT_PUBLIC_ARC_CHAIN_ID: ${{ secrets.NEXT_PUBLIC_ARC_CHAIN_ID }}
+          NEXT_PUBLIC_USDC_ADDRESS: ${{ secrets.NEXT_PUBLIC_USDC_ADDRESS }}
+          NEXT_PUBLIC_EURC_ADDRESS: ${{ secrets.NEXT_PUBLIC_EURC_ADDRESS || '0x89B50855Aa3bE2F677cD6303Cec089B5F319D72a' }}
+          NEXT_PUBLIC_USYC_ADDRESS: ${{ secrets.NEXT_PUBLIC_USYC_ADDRESS || '0xe9185F0c5F296Ed1797AaE4238D26CCaBEadb86C' }}
+          NEXT_PUBLIC_USYC_TELLER: ${{ secrets.NEXT_PUBLIC_USYC_TELLER || '0x9fdF14c5B14173D74C08Af27AebFf39240dC105A' }}
+        run: node scripts/deploy-agba-market.mjs
