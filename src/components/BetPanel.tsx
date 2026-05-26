@@ -85,11 +85,19 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
         body: JSON.stringify({ marketId: market.id, side, amount: numericAmount, currency, txHash: receipt.hash, walletAddress: address }),
       });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Bet transaction succeeded but recording failed");
+      if (!response.ok) {
+        const errMsg = typeof data.error === "string" ? data.error
+          : data.error?.message ? String(data.error.message)
+          : "Bet transaction succeeded but recording failed";
+        throw new Error(errMsg);
+      }
       setStatus(`${currency} bet recorded.`);
       onBetPlaced?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Bet failed");
+      const msg = err instanceof Error ? err.message
+        : err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message)
+        : "Bet failed. Please try again.";
+      setError(msg);
     } finally {
       setLoading(false);
     }
@@ -117,7 +125,10 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
       await tx.wait();
       setStatus("Claim completed.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Claim failed");
+      const msg = err instanceof Error ? err.message
+        : err && typeof err === "object" && "message" in err ? String((err as { message: unknown }).message)
+        : "Claim failed. Please try again.";
+      setError(msg);
     } finally {
       setClaiming(false);
     }
