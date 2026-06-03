@@ -122,11 +122,6 @@ export function YieldAgentCard({
   return (
     <div className="border border-white/10 p-5">
       <h2 className="font-display text-2xl font-black text-[#f5a623]">Agent automation</h2>
-      <p className="mt-3 text-sm leading-relaxed text-white/60">
-        The GitHub cron calls the agent USYC sweep every 15 minutes. The agent checks open markets,
-        skips resolved or empty pools, and invests eligible idle USDC above the configured threshold.
-      </p>
-
       {loading ? (
         <AgentCardSkeleton />
       ) : (
