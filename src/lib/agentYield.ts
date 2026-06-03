@@ -183,6 +183,8 @@ export async function completeUSYCRedemption(
   const usdc = new Contract(usdcAddress, ERC20_ABI, wallet);
   const teller = new Contract(tellerAddress, TELLER_ABI, wallet);
 
+  const principalRaw = await contract.marketUsycPrincipal(marketId).catch(() => BigInt(0)) as bigint;
+
   await (await usyc.approve(tellerAddress, shares)).wait();
 
   const before = await usdc.balanceOf(wallet.address) as bigint;
@@ -208,7 +210,8 @@ export async function completeUSYCRedemption(
   const tx = await contract.completeRedemption(marketId, usdcReceived);
   await tx.wait();
 
-  return Number(formatUnits(usdcReceived, 6));
+  const yieldEarned = usdcReceived > principalRaw ? usdcReceived - principalRaw : BigInt(0);
+  return Number(formatUnits(yieldEarned, 6));
 }
 
 function isMissingOptionalMarketColumnError(error: { code?: string; message?: string }) {
