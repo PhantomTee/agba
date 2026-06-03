@@ -60,6 +60,8 @@ export const MARKET_ABI = [
   "function claimEURCWinnings(uint256 marketId) external",
   "function withdrawFees(address recipient,uint256 amount) external",
   "function investInUSYC(uint256 marketId,uint256 usdcAmount) external",
+  "function recordUSYCShares(uint256 marketId,uint256 shares) external",
+  "function completeRedemption(uint256 marketId,uint256 usdcReceived) external",
   "function eurcToken() view returns (address)",
   "function usycToken() view returns (address)",
   "function usycTeller() view returns (address)",
@@ -79,12 +81,21 @@ export const MARKET_ABI = [
   "event Claim(uint256 indexed marketId,address indexed user,uint256 amount)",
   "event EURCClaim(uint256 indexed marketId,address indexed user,uint256 amount)",
   "event MarketUSYCInvested(uint256 indexed marketId,uint256 usdcAmount,uint256 usycShares)",
+  "event MarketUSYCRedemptionPending(uint256 indexed marketId,uint256 usycShares)",
   "event MarketUSYCRedeemed(uint256 indexed marketId,uint256 usdcReceived,uint256 yieldEarned)",
 ] as const;
 
 export const ERC20_ABI = [
   "function allowance(address owner,address spender) view returns (uint256)",
   "function approve(address spender,uint256 amount) returns (bool)",
+  "function transfer(address to,uint256 amount) returns (bool)",
   "function decimals() view returns (uint8)",
   "function balanceOf(address owner) view returns (uint256)",
+] as const;
+
+export const TELLER_ABI = [
+  "function deposit(uint256 assets,address receiver) external returns (uint256)",
+  "function buy(uint256 assets,address receiver) external returns (uint256)",
+  "function redeem(uint256 shares,address receiver,address owner) external returns (uint256)",
+  "function sell(uint256 shares,address receiver) external returns (uint256)",
 ] as const;

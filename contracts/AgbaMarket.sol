@@ -55,6 +55,7 @@ contract AgbaMarket {
     event EURCClaim(uint256 indexed marketId, address indexed user, uint256 amount);
     event MarketResolved(uint256 indexed marketId, bool outcome);
     event MarketUSYCInvested(uint256 indexed marketId, uint256 usdcAmount, uint256 usycShares);
+    event MarketUSYCRedemptionPending(uint256 indexed marketId, uint256 usycShares);
     event MarketUSYCRedeemed(uint256 indexed marketId, uint256 usdcReceived, uint256 yieldEarned);
 
     modifier onlyOwner() {
@@ -226,51 +227,32 @@ contract AgbaMarket {
         require(!market.resolved, "resolved");
         require(usdcAmount > 0, "amount required");
         require(usdcAmount <= market.yesPool + market.noPool, "amount exceeds pool");
-        uint256 beforeShares = IERC20(usycToken).balanceOf(owner);
-        require(IERC20(usdcToken).approve(usycTeller, usdcAmount), "approve failed");
-        bool success = _callUSYCTeller(usdcAmount);
-        require(success, "usyc invest failed");
-        uint256 shares = IERC20(usycToken).balanceOf(owner) - beforeShares;
-        require(shares > 0, "no usyc received");
-        marketUsycBalance[marketId] += shares;
+        require(IERC20(usdcToken).transfer(owner, usdcAmount), "usdc transfer failed");
         marketUsycPrincipal[marketId] += usdcAmount;
-        emit MarketUSYCInvested(marketId, usdcAmount, shares);
+    }
+
+    function recordUSYCShares(uint256 marketId, uint256 shares) external onlyOwner {
+        require(shares > 0, "shares required");
+        require(marketUsycPrincipal[marketId] > 0, "no pending investment");
+        marketUsycBalance[marketId] += shares;
+        emit MarketUSYCInvested(marketId, marketUsycPrincipal[marketId], shares);
     }
 
     function _redeemMarketUSYC(uint256 marketId) internal {
         uint256 shares = marketUsycBalance[marketId];
         if (shares == 0) return;
+        emit MarketUSYCRedemptionPending(marketId, shares);
+    }
+
+    function completeRedemption(uint256 marketId, uint256 usdcReceived) external onlyOwner {
+        require(marketUsycBalance[marketId] > 0 || marketUsycPrincipal[marketId] > 0, "no pending redemption");
+        require(IERC20(usdcToken).transferFrom(owner, address(this), usdcReceived), "usdc pull failed");
         uint256 principal = marketUsycPrincipal[marketId];
-        uint256 beforeUsdc = IERC20(usdcToken).balanceOf(address(this));
-        // Pull USYC from owner wallet (owner must have pre-approved this contract)
-        require(IERC20(usycToken).transferFrom(owner, address(this), shares), "usyc pull failed");
-        require(IERC20(usycToken).approve(usycTeller, shares), "approve failed");
-        bool success = _callUSYCRedeem(shares);
-        require(success, "usyc redeem failed");
-        uint256 received = IERC20(usdcToken).balanceOf(address(this)) - beforeUsdc;
-        uint256 yieldEarned = received > principal ? received - principal : 0;
+        uint256 yieldEarned = usdcReceived > principal ? usdcReceived - principal : 0;
         markets[marketId].yieldEarned = yieldEarned;
         marketUsycBalance[marketId] = 0;
         marketUsycPrincipal[marketId] = 0;
-        emit MarketUSYCRedeemed(marketId, received, yieldEarned);
-    }
-
-    function _callUSYCTeller(uint256 usdcAmount) internal returns (bool) {
-        // ERC-4626: deposit(uint256 assets, address receiver)
-        (bool success,) = usycTeller.call(abi.encodeWithSignature("deposit(uint256,address)", usdcAmount, owner));
-        if (success) return true;
-        // Alternate subscription signature used by some teller wrappers
-        (success,) = usycTeller.call(abi.encodeWithSignature("buy(uint256,address)", usdcAmount, owner));
-        return success;
-    }
-
-    function _callUSYCRedeem(uint256 shares) internal returns (bool) {
-        // ERC-4626: redeem(uint256 shares, address receiver, address owner)
-        (bool success,) = usycTeller.call(abi.encodeWithSignature("redeem(uint256,address,address)", shares, owner, address(this)));
-        if (success) return true;
-        // Alternate redemption signature used by some teller wrappers
-        (success,) = usycTeller.call(abi.encodeWithSignature("sell(uint256,address)", shares, owner));
-        return success;
+        emit MarketUSYCRedeemed(marketId, usdcReceived, yieldEarned);
     }
 
     function getMarket(uint256 marketId)

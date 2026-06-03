@@ -1,11 +1,11 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { formatUnits } from "ethers";
 import { assertCronRequest } from "@/lib/auth";
 import { getMarketContract } from "@/lib/chain";
 import { getEnv, getOptionalEnv } from "@/lib/env";
 import { resolveMarketQuestion } from "@/lib/groq";
 import { getSupabaseAdmin } from "@/lib/supabase";
 import { tavilySearch } from "@/lib/tavily";
+import { completeUSYCRedemption } from "@/lib/agentYield";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 60;
@@ -129,28 +129,29 @@ function extractNairaThreshold(question: string) {
 
 async function resolveOnchainAndDb(marketId: number, outcome: boolean, reasoning: string) {
   const contract = getMarketContract();
+
+  // Read USYC shares before resolving (contract clears them via completeRedemption later)
+  const usycShares = await contract.getMarketUSYCBalance(marketId).catch(() => BigInt(0)) as bigint;
+
   const tx = await contract.resolveMarket(marketId, outcome);
-  const receipt = await tx.wait();
-  const yieldEarned = extractYieldEarned(contract, receipt);
+  await tx.wait();
+
+  // Complete USYC redemption off-chain: owner redeems via teller, pushes USDC back to contract
+  let yieldEarned = 0;
+  if (usycShares > BigInt(0)) {
+    try {
+      yieldEarned = await completeUSYCRedemption(contract, marketId, usycShares);
+    } catch (e) {
+      console.error("[resolve] USYC redemption failed for market", marketId, e instanceof Error ? e.message : e);
+    }
+  }
+
   const supabase = getSupabaseAdmin();
   const { error } = await supabase
     .from("markets")
     .update({ resolved: true, outcome, groq_resolution_reasoning: reasoning, yield_earned: yieldEarned })
     .eq("id", marketId);
   if (error) throw error;
-}
-
-function extractYieldEarned(contract: ReturnType<typeof getMarketContract>, receipt: { logs?: unknown[] } | null | undefined) {
-  const log = receipt?.logs
-    ?.map((entry) => {
-      try {
-        return contract.interface.parseLog(entry as never);
-      } catch {
-        return null;
-      }
-    })
-    .find((entry) => entry?.name === "MarketUSYCRedeemed");
-  return log?.args?.yieldEarned ? Number(formatUnits(log.args.yieldEarned, 6)) : 0;
 }
 
 async function notifyManualResolution(marketId: number, question: string) {
