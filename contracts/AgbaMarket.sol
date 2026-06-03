@@ -226,11 +226,11 @@ contract AgbaMarket {
         require(!market.resolved, "resolved");
         require(usdcAmount > 0, "amount required");
         require(usdcAmount <= market.yesPool + market.noPool, "amount exceeds pool");
-        uint256 beforeShares = IERC20(usycToken).balanceOf(address(this));
+        uint256 beforeShares = IERC20(usycToken).balanceOf(owner);
         require(IERC20(usdcToken).approve(usycTeller, usdcAmount), "approve failed");
         bool success = _callUSYCTeller(usdcAmount);
         require(success, "usyc invest failed");
-        uint256 shares = IERC20(usycToken).balanceOf(address(this)) - beforeShares;
+        uint256 shares = IERC20(usycToken).balanceOf(owner) - beforeShares;
         require(shares > 0, "no usyc received");
         marketUsycBalance[marketId] += shares;
         marketUsycPrincipal[marketId] += usdcAmount;
@@ -242,6 +242,8 @@ contract AgbaMarket {
         if (shares == 0) return;
         uint256 principal = marketUsycPrincipal[marketId];
         uint256 beforeUsdc = IERC20(usdcToken).balanceOf(address(this));
+        // Pull USYC from owner wallet (owner must have pre-approved this contract)
+        require(IERC20(usycToken).transferFrom(owner, address(this), shares), "usyc pull failed");
         require(IERC20(usycToken).approve(usycTeller, shares), "approve failed");
         bool success = _callUSYCRedeem(shares);
         require(success, "usyc redeem failed");
@@ -255,19 +257,19 @@ contract AgbaMarket {
 
     function _callUSYCTeller(uint256 usdcAmount) internal returns (bool) {
         // ERC-4626: deposit(uint256 assets, address receiver)
-        (bool success,) = usycTeller.call(abi.encodeWithSignature("deposit(uint256,address)", usdcAmount, address(this)));
+        (bool success,) = usycTeller.call(abi.encodeWithSignature("deposit(uint256,address)", usdcAmount, owner));
         if (success) return true;
         // Alternate subscription signature used by some teller wrappers
-        (success,) = usycTeller.call(abi.encodeWithSignature("buy(uint256,address)", usdcAmount, address(this)));
+        (success,) = usycTeller.call(abi.encodeWithSignature("buy(uint256,address)", usdcAmount, owner));
         return success;
     }
 
     function _callUSYCRedeem(uint256 shares) internal returns (bool) {
         // ERC-4626: redeem(uint256 shares, address receiver, address owner)
-        (bool success,) = usycTeller.call(abi.encodeWithSignature("redeem(uint256,address,address)", shares, address(this), address(this)));
+        (bool success,) = usycTeller.call(abi.encodeWithSignature("redeem(uint256,address,address)", shares, owner, address(this)));
         if (success) return true;
         // Alternate redemption signature used by some teller wrappers
-        (success,) = usycTeller.call(abi.encodeWithSignature("sell(uint256,address)", shares, address(this)));
+        (success,) = usycTeller.call(abi.encodeWithSignature("sell(uint256,address)", shares, owner));
         return success;
     }
 
