@@ -171,9 +171,7 @@ export function YieldActivityPanel({
         <ActivitySkeleton />
       ) : activity.length === 0 ? (
         <p className="mt-3 text-sm leading-relaxed text-white/55">
-          {totalPoolUsdc === 0
-            ? `No bets placed yet — all market pools are empty. The sweep needs at least $${minIdleUsdc} idle USDC per market before it can invest.`
-            : `Eligible idle exists but no on-chain transactions found. Verify that APP_URL and CRON_SECRET are set as GitHub Actions secrets and that the USYC teller is operational on this network.`}
+          No yield activity yet — the sweep will invest once markets accumulate at least ${minIdleUsdc} USDC.
         </p>
       ) : (
         <div className="mt-3 space-y-2">
