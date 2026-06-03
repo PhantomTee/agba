@@ -105,7 +105,7 @@ export async function GET(_req: NextRequest) {
       for (const row of resolvedRows || []) questionMap.set(Number(row.id), String(row.question));
     }
 
-    const activity: ActivityItem[] = [
+    const eventActivity: ActivityItem[] = [
       ...investedLogs.map((log) => ({
         type: "invested" as const,
         marketId: Number(log.args?.marketId || 0),
@@ -134,6 +134,24 @@ export async function GET(_req: NextRequest) {
       .filter((e) => e.marketId > 0)
       .sort((a, b) => b.blockNumber - a.blockNumber)
       .slice(0, 50);
+
+    // Fall back to synthesising activity from on-chain perMarket state when the
+    // RPC returns no event history (common on testnets with limited log range).
+    const activity: ActivityItem[] =
+      eventActivity.length > 0
+        ? eventActivity
+        : perMarket
+            .filter((m) => m.investedPrincipal > 0 || m.yieldEarned > 0)
+            .map((m) => ({
+              type: "invested" as const,
+              marketId: m.id,
+              question: questionMap.get(m.id) ?? `Market #${m.id}`,
+              usdcAmount: m.investedPrincipal,
+              usycShares: m.usycShares,
+              yieldEarned: m.yieldEarned,
+              txHash: "",
+              blockNumber: 0,
+            }));
 
     const result: YieldChainResponse = {
       contractUsdc: Number(formatUnits(contractUsdcRaw, 6)),

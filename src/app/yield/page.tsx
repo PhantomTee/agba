@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { formatUnits } from "ethers";
 import { YieldChainMetrics, YieldAgentCard, YieldActivityPanel } from "@/components/YieldChainPanel";
+import { getReadOnlyMarketContract } from "@/lib/chain";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const metadata: Metadata = {
@@ -165,12 +167,27 @@ async function fetchYieldState(): Promise<YieldState> {
 
     if (error) throw error;
 
-    const markets: YieldMarket[] = (data || []).map((m) => ({
+    const dbMarkets: YieldMarket[] = (data || []).map((m) => ({
       id: Number(m.id),
       question: String(m.question),
       category: String(m.category),
       pool: Number(m.yes_pool || 0) + Number(m.no_pool || 0),
     }));
+
+    // Enrich pools from chain — Supabase yes_pool/no_pool can lag behind on-chain bets
+    const contract = getReadOnlyMarketContract();
+    const markets = await Promise.all(
+      dbMarkets.map(async (m) => {
+        try {
+          const onchain = await contract.getMarket(m.id);
+          const pool = Number(formatUnits(BigInt(onchain.yesPool ?? 0), 6)) +
+                       Number(formatUnits(BigInt(onchain.noPool ?? 0), 6));
+          return { ...m, pool };
+        } catch {
+          return m;
+        }
+      })
+    );
 
     const totalPoolUsdc = markets.reduce((sum, m) => sum + m.pool, 0);
     const minIdle = Number(minIdleUsdc);

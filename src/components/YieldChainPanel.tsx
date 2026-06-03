@@ -186,7 +186,7 @@ export function YieldActivityPanel({
                   {item.type === "invested" ? "INVESTED" : "REDEEMED"}
                 </span>
                 <span className="text-xs font-bold text-white/40">Market #{item.marketId}</span>
-                <span className="text-xs text-white/25">block {item.blockNumber}</span>
+                {item.blockNumber > 0 && <span className="text-xs text-white/25">block {item.blockNumber}</span>}
               </div>
               <p className="mt-2 line-clamp-2 text-xs font-bold leading-snug text-white">
                 {item.question}
@@ -206,9 +206,11 @@ export function YieldActivityPanel({
                   </>
                 )}
               </div>
-              <p className="mt-2 break-all font-mono text-xs text-white/30">
-                {item.txHash.slice(0, 10)}…{item.txHash.slice(-8)}
-              </p>
+              {item.txHash ? (
+                <p className="mt-2 break-all font-mono text-xs text-white/30">
+                  {item.txHash.slice(0, 10)}…{item.txHash.slice(-8)}
+                </p>
+              ) : null}
             </div>
           ))}
         </div>
