@@ -1,8 +1,8 @@
 import { Contract, formatUnits } from "ethers";
 import { type NextRequest, NextResponse } from "next/server";
 import { getArcProvider, getReadOnlyMarketContract, getReadOnlyUsdcContract } from "@/lib/chain";
-import { ERC20_ABI } from "@/lib/constants";
-import { getEnv } from "@/lib/env";
+import { ERC20_ABI, TELLER_ABI } from "@/lib/constants";
+import { getEnv, getOptionalEnv } from "@/lib/env";
 import { getSupabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -26,6 +26,8 @@ export type YieldChainResponse = {
     investedPrincipal: number;
     usycShares: number;
     yieldEarned: number;
+    currentValueUsdc: number;
+    unrealizedYield: number;
   }>;
   activity: ActivityItem[];
 };
@@ -45,10 +47,12 @@ export async function GET(_req: NextRequest) {
   try {
     const contractAddress = getEnv("NEXT_PUBLIC_CONTRACT_ADDRESS");
     const usycAddress = getEnv("NEXT_PUBLIC_USYC_ADDRESS");
+    const tellerAddress = getOptionalEnv("NEXT_PUBLIC_USYC_TELLER") || "0x9fdF14c5B14173D74C08Af27AebFf39240dC105A";
     const provider = getArcProvider();
     const contract = getReadOnlyMarketContract();
     const usdc = getReadOnlyUsdcContract();
     const usyc = new Contract(usycAddress, ERC20_ABI, provider);
+    const teller = new Contract(tellerAddress, TELLER_ABI, provider);
     const supabase = getSupabaseAdmin();
 
     const { data: dbMarkets } = await supabase
@@ -78,14 +82,21 @@ export async function GET(_req: NextRequest) {
             contract.getMarketUSYCBalance(id).catch(() => BigInt(0)) as Promise<bigint>,
             contract.getMarketYieldEarned(id).catch(() => BigInt(0)) as Promise<bigint>,
           ]);
-          return {
-            id,
-            investedPrincipal: Number(formatUnits(principalRaw, 6)),
-            usycShares: Number(formatUnits(usycSharesRaw, 6)),
-            yieldEarned: Number(formatUnits(yieldRaw, 6)),
-          };
+          const investedPrincipal = Number(formatUnits(principalRaw, 6));
+          const usycShares = Number(formatUnits(usycSharesRaw, 6));
+          const yieldEarned = Number(formatUnits(yieldRaw, 6));
+
+          let currentValueUsdc = investedPrincipal;
+          if (usycSharesRaw > BigInt(0)) {
+            const previewRaw = await teller.previewRedeem(usycSharesRaw)
+              .catch(() => teller.convertToAssets(usycSharesRaw).catch(() => principalRaw)) as bigint;
+            currentValueUsdc = Number(formatUnits(previewRaw, 6));
+          }
+          const unrealizedYield = Math.max(0, currentValueUsdc - investedPrincipal);
+
+          return { id, investedPrincipal, usycShares, yieldEarned, currentValueUsdc, unrealizedYield };
         } catch {
-          return { id, investedPrincipal: 0, usycShares: 0, yieldEarned: 0 };
+          return { id, investedPrincipal: 0, usycShares: 0, yieldEarned: 0, currentValueUsdc: 0, unrealizedYield: 0 };
         }
       })
     );

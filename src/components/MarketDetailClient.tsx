@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAccount } from "wagmi";
 import { BetPanel } from "./BetPanel";
 import { MarketCard } from "./MarketCard";
 import { formatUsdc } from "@/lib/odds";
@@ -9,15 +10,20 @@ import type { Bet, Market } from "@/lib/types";
 
 export function MarketDetailClient({ id }: { id: string }) {
   const searchParams = useSearchParams();
-  const initialSide = searchParams.get("side") !== "no"; // default YES unless ?side=no
+  const initialSide = searchParams.get("side") !== "no";
+  const { address } = useAccount();
   const [market, setMarket] = useState<Market | null>(null);
   const [bets, setBets] = useState<Bet[]>([]);
   const [related, setRelated] = useState<Market[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  function buildUrl(wallet?: string) {
+    return wallet ? `/api/markets/${id}?wallet=${wallet}` : `/api/markets/${id}`;
+  }
+
   useEffect(() => {
-    fetch(`/api/markets/${id}`)
+    fetch(buildUrl(address))
       .then(async (response) => {
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || "Unable to load market");
@@ -27,17 +33,19 @@ export function MarketDetailClient({ id }: { id: string }) {
       })
       .catch((err) => setError(err instanceof Error ? err.message : "Unable to load market"))
       .finally(() => setLoading(false));
-  }, [id]);
+  // Re-fetch when wallet connects so userBets is populated
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id, address]);
 
   function refreshBets() {
-    fetch(`/api/markets/${id}`)
+    fetch(buildUrl(address))
       .then(async (response) => {
         if (!response.ok) return;
         const data = await response.json();
         setBets(data.bets ?? []);
         if (data.market) setMarket(data.market);
       })
-      .catch(() => {/* silent refresh — don't overwrite a working page with an error */});
+      .catch(() => {});
   }
 
   if (loading) return <main className="mx-auto max-w-7xl px-4 py-12 text-white/55">Loading market...</main>;

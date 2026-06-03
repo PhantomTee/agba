@@ -98,4 +98,6 @@ export const TELLER_ABI = [
   "function buy(uint256 assets,address receiver) external returns (uint256)",
   "function redeem(uint256 shares,address receiver,address owner) external returns (uint256)",
   "function sell(uint256 shares,address receiver) external returns (uint256)",
+  "function previewRedeem(uint256 shares) view returns (uint256)",
+  "function convertToAssets(uint256 shares) view returns (uint256)",
 ] as const;

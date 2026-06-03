@@ -8,6 +8,7 @@ import { useAccount, useConnectorClient, useSwitchChain } from "wagmi";
 import { ERC20_ABI, MARKET_ABI } from "@/lib/constants";
 import { publicConfig } from "@/lib/env";
 import { calculateOdds, formatUsdc } from "@/lib/odds";
+import { useMarketYield } from "@/lib/useMarketYield";
 import type { Market } from "@/lib/types";
 
 type BetCurrency = "USDC" | "EURC";
@@ -29,6 +30,17 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
   const odds = calculateOdds(yesPool, noPool, market.initial_probability_yes ?? market.groq_yes_probability);
   const estimated = estimatePayout(Number(amount || "0"), side, yesPool, noPool);
   const currencySymbol = currency === "EURC" ? "€" : "$";
+
+  const { unrealizedYield, investedPrincipal, loading: yieldLoading } = useMarketYield(market.id);
+  const winningPool = side ? yesPool : noPool;
+  const userExistingBet = currency === "USDC"
+    ? (side ? Number(market.userBets?.yes || 0) : Number(market.userBets?.no || 0))
+    : 0;
+  const newBetAmount = Number(amount || "0");
+  const totalUserBet = userExistingBet + (newBetAmount > 0 ? newBetAmount : 0);
+  const estimatedYieldShare = unrealizedYield > 0 && winningPool > 0 && totalUserBet > 0
+    ? (unrealizedYield * totalUserBet) / (winningPool + (newBetAmount > 0 ? newBetAmount : 0))
+    : 0;
 
   async function placeBet() {
     setError("");
@@ -145,7 +157,20 @@ export function BetPanel({ market, initialSide = true, onBetPlaced }: { market: 
         className="mt-2 w-full border border-white/10 bg-black px-4 py-3 text-lg text-white outline-none focus:border-[#f5a623]"
         placeholder="0.00"
       />
-      <p className="mt-3 text-sm text-white/55">Estimated payout if correct: {currencySymbol}{formatUsdc(estimated)} {currency}</p>
+      <p className="mt-3 text-sm text-white/55">
+        Estimated payout if correct: {currencySymbol}{formatUsdc(estimated)} {currency}
+        {estimatedYieldShare > 0 && (
+          <span className="ml-2 text-[#2d9d57]">+{currencySymbol}{formatUsdc(estimatedYieldShare)} yield</span>
+        )}
+      </p>
+      {investedPrincipal > 0 && !yieldLoading && currency === "USDC" && (
+        <p className="mt-1 text-xs text-white/40">
+          Pool earning USYC yield · {unrealizedYield > 0
+            ? `~${currencySymbol}${formatUsdc(unrealizedYield)} accrued so far`
+            : "yield accruing…"
+          }
+        </p>
+      )}
       <button disabled={loading || switchingChain || market.resolved} onClick={placeBet} className="mt-5 w-full bg-[#f5a623] px-4 py-4 text-sm font-black text-black disabled:cursor-not-allowed disabled:opacity-50">
         {switchingChain ? "Switching to Arc..." : loading ? "Processing..." : market.resolved ? "Market resolved" : `Bet ${side ? "YES" : "NO"} with ${currency}`}
       </button>
