@@ -38,6 +38,18 @@ export type Market = {
   resolved: boolean;
   outcome: boolean | null;
   groq_resolution_reasoning: string | null;
+  created_by: string | null;
+  resolution_mode: string | null;
+  resolution_source_url: string | null;
+  genlayer_creator_tx: string | null;
+  genlayer_resolver_tx: string | null;
+  genlayer_status: string | null;
+  genlayer_creation_reasoning: string | null;
+  genlayer_resolution_reasoning: string | null;
+  genlayer_resolution_evidence: string | null;
+  genlayer_resolution_source_used: string | null;
+  duration_days: number | null;
+  resolves_at_reason: string | null;
   news_items?: NewsItem | null;
   userBets?: { yes: string; no: string };
   userEURCBets?: { yes: string; no: string };

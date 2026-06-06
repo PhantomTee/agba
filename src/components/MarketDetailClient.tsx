@@ -52,21 +52,44 @@ export function MarketDetailClient({ id }: { id: string }) {
   if (error) return <main className="mx-auto max-w-7xl px-4 py-12 text-red-200">{error}</main>;
   if (!market) return <main className="mx-auto max-w-7xl px-4 py-12 text-white/55">Market not found.</main>;
 
+  const resolutionDate = market.resolves_at ? new Date(market.resolves_at).toLocaleString() : "No resolution date";
+  const isGenLayerMarket = market.created_by === "GENLAYER" && Boolean(market.resolution_source_url);
+
   return (
     <main className="mx-auto grid max-w-7xl gap-10 px-4 py-10 lg:grid-cols-[minmax(0,1fr)_420px]">
       <section>
         <p className="mb-3 text-sm font-black uppercase tracking-[0.28em] text-[#f5a623]">{market.category}</p>
         <h1 className="font-display text-5xl font-black leading-none text-white md:text-7xl">{market.question}</h1>
         <div className="mt-5 flex flex-wrap gap-3">
+          {isGenLayerMarket && <span className="text-xs font-black text-[#4cc9f0]">Created by GenLayer</span>}
           {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
           {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">Ⓔ Earning</span>}
           {market.resolved && Number(market.yield_earned || 0) > 0 && (
             <span className="text-xs font-black text-[#2d6a4f]">+${formatUsdc(Number(market.yield_earned || 0))} yield earned for winners</span>
           )}
+          {market.genlayer_status === "UNRESOLVABLE" && (
+            <span className="text-xs font-black text-[#d1495b]">GenLayer could not resolve this market from the named source.</span>
+          )}
         </div>
         <div className="mt-8 border-l border-[#f5a623] bg-white/[0.03] p-5">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-white/45">Resolution criteria</h2>
           <p className="mt-3 text-white">{market.resolution_criteria || "No resolution criteria recorded."}</p>
+          <div className="mt-4 grid gap-3 text-sm text-white/60 sm:grid-cols-2">
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Resolution date</div>
+              <div className="mt-1 text-white/75">{resolutionDate}</div>
+            </div>
+            <div>
+              <div className="text-xs font-black uppercase tracking-[0.18em] text-white/35">Duration</div>
+              <div className="mt-1 text-white/75">{market.duration_days ? `${market.duration_days} days` : "Duration unavailable"}</div>
+            </div>
+          </div>
+          {market.resolves_at_reason && <p className="mt-4 text-sm text-white/55">{market.resolves_at_reason}</p>}
+          {market.resolution_source_url && (
+            <a href={market.resolution_source_url} target="_blank" rel="noreferrer" className="mt-4 block break-all text-sm font-bold text-[#4cc9f0] hover:text-white">
+              Resolution source: {market.resolution_source_url}
+            </a>
+          )}
         </div>
         {market.news_items && (
           <a href={market.news_items.url} target="_blank" rel="noreferrer" className="mt-6 block border border-white/10 p-5 hover:border-[#f5a623]">
@@ -105,8 +128,30 @@ export function MarketDetailClient({ id }: { id: string }) {
         <BetPanel market={market} initialSide={initialSide} onBetPlaced={refreshBets} />
         <div className="border border-white/10 p-5">
           <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#f5a623]">Why Àgbà made this market</h2>
-          <p className="mt-3 text-sm leading-relaxed text-white/65">{market.news_items?.groq_reasoning || "No agent reasoning recorded."}</p>
+          <p className="mt-3 text-sm leading-relaxed text-white/65">
+            {market.genlayer_creation_reasoning || market.news_items?.groq_reasoning || "No agent reasoning recorded."}
+          </p>
         </div>
+        {(market.genlayer_creator_tx || market.genlayer_resolver_tx || market.genlayer_resolution_reasoning || market.genlayer_resolution_evidence) && (
+          <div className="border border-white/10 p-5">
+            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[#4cc9f0]">GenLayer proof</h2>
+            {market.genlayer_creator_tx && (
+              <p className="mt-3 break-all text-xs text-white/55">
+                Creator tx: <span className="font-mono text-white/75">{market.genlayer_creator_tx}</span>
+              </p>
+            )}
+            {market.genlayer_resolver_tx && (
+              <p className="mt-3 break-all text-xs text-white/55">
+                Resolver tx: <span className="font-mono text-white/75">{market.genlayer_resolver_tx}</span>
+              </p>
+            )}
+            {market.genlayer_resolution_source_used && (
+              <p className="mt-3 break-all text-xs text-white/55">Source used: {market.genlayer_resolution_source_used}</p>
+            )}
+            {market.genlayer_resolution_evidence && <p className="mt-3 text-sm text-white/65">{market.genlayer_resolution_evidence}</p>}
+            {market.genlayer_resolution_reasoning && <p className="mt-3 text-sm text-white/55">{market.genlayer_resolution_reasoning}</p>}
+          </div>
+        )}
         <a href={`/api/og/${market.id}`} target="_blank" rel="noreferrer" className="block border border-white/10 px-4 py-3 text-center text-sm font-bold text-white/70 hover:text-white">
           Share image
         </a>

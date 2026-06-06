@@ -8,7 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "deploy:contract": "node scripts/deploy-agba-market.mjs",
-    "deploy:mock-usyc": "node scripts/deploy-mock-usyc.mjs"
+    "deploy:mock-usyc": "node scripts/deploy-mock-usyc.mjs",
+    "genlayer:deploy": "node scripts/deploy-genlayer-contracts.mjs",
+    "genlayer:wallet:create": "node scripts/genlayer-wallet-create.mjs",
+    "genlayer:fund": "node scripts/genlayer-fund.mjs",
+    "genlayer:balance": "node scripts/genlayer-balance.mjs"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.11.1",
@@ -19,6 +23,7 @@
     "@vercel/og": "^0.8.5",
     "asynckit": "^0.4.0",
     "ethers": "^6.16.0",
+    "genlayer-js": "^1.1.8",
     "groq-sdk": "^0.37.0",
     "lightningcss": "^1.30.2",
     "lucide-react": "^0.562.0",
@@ -27,7 +32,8 @@
     "react-dom": "18.3.1",
     "resend": "^6.6.0",
     "rss-parser": "^3.13.0",
-    "wagmi": "^2.19.5"
+    "wagmi": "^2.19.5",
+    "zod": "^3.25.76"
   },
   "optionalDependencies": {
     "lightningcss-win32-x64-msvc": "^1.30.2"

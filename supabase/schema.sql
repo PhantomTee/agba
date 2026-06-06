@@ -35,7 +35,19 @@ create table if not exists markets (
   resolves_at timestamptz,
   resolved boolean default false,
   outcome boolean,
-  groq_resolution_reasoning text
+  groq_resolution_reasoning text,
+  created_by text default 'GENLAYER',
+  resolution_mode text default 'GENLAYER',
+  resolution_source_url text,
+  genlayer_creator_tx text,
+  genlayer_resolver_tx text,
+  genlayer_status text default 'NOT_REQUESTED',
+  genlayer_creation_reasoning text,
+  genlayer_resolution_reasoning text,
+  genlayer_resolution_evidence text,
+  genlayer_resolution_source_used text,
+  duration_days integer,
+  resolves_at_reason text
 );
 
 create table if not exists bets (
@@ -78,3 +90,15 @@ alter table markets add column if not exists usyc_invested boolean default false
 alter table markets add column if not exists yield_earned numeric default 0;
 alter table markets add column if not exists initial_probability_yes integer default 50;
 alter table markets add column if not exists agent_seeded boolean default false;
+alter table markets add column if not exists created_by text default 'GENLAYER';
+alter table markets add column if not exists resolution_mode text default 'GENLAYER';
+alter table markets add column if not exists resolution_source_url text;
+alter table markets add column if not exists genlayer_creator_tx text;
+alter table markets add column if not exists genlayer_resolver_tx text;
+alter table markets add column if not exists genlayer_status text default 'NOT_REQUESTED';
+alter table markets add column if not exists genlayer_creation_reasoning text;
+alter table markets add column if not exists genlayer_resolution_reasoning text;
+alter table markets add column if not exists genlayer_resolution_evidence text;
+alter table markets add column if not exists genlayer_resolution_source_used text;
+alter table markets add column if not exists duration_days integer;
+alter table markets add column if not exists resolves_at_reason text;

@@ -1,0 +1,16 @@
+name: GenLayer Resolution Request
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+
+jobs:
+  request-genlayer-resolution:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Request GenLayer resolution
+        run: |
+          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/request-genlayer-resolution" \
+            -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
+            -H "Content-Type: application/json"

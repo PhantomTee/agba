@@ -7,6 +7,7 @@ export function MarketCard({ market }: { market: Market }) {
   const odds = calculateOdds(Number(market.yes_pool || 0), Number(market.no_pool || 0), market.initial_probability_yes ?? market.groq_yes_probability);
   const total = Number(market.yes_pool || 0) + Number(market.no_pool || 0);
   const eurcTotal = Number(market.eurc_yes_pool || 0) + Number(market.eurc_no_pool || 0);
+  const isGenLayerMarket = market.created_by === "GENLAYER" && Boolean(market.resolution_source_url);
   return (
     <article className="relative min-w-0 overflow-x-hidden border-b border-white/10 py-7">
       {market.resolved && (
@@ -20,6 +21,7 @@ export function MarketCard({ market }: { market: Market }) {
         </span>
         <span className="text-xs font-bold text-white/55">{market.country || "AFRICA"}</span>
         <span className="text-xs text-white/45">{timeRemaining(market.resolves_at)}</span>
+        {isGenLayerMarket && <span className="text-xs font-black text-[#4cc9f0]">Created by GenLayer</span>}
         {market.agent_seeded && <span className="text-xs font-black text-[#f5a623]">🤖 Agent seeded</span>}
         {market.usyc_invested && !market.resolved && <span className="text-xs font-black text-[#2d6a4f]">Ⓔ Earning</span>}
       </div>
@@ -40,7 +42,7 @@ export function MarketCard({ market }: { market: Market }) {
       </div>
       {odds.source !== "pool" && (
         <p className="mt-2 text-xs font-bold uppercase tracking-[0.18em] text-white/40">
-          {odds.source === "ai" ? "AI est." : "Neutral opening view until bets set pool odds"}
+          {isGenLayerMarket ? "GenLayer est." : odds.source === "ai" ? "AI est." : "Neutral opening view until bets set pool odds"}
         </p>
       )}
       {market.resolved && Number(market.yield_earned || 0) > 0 && (

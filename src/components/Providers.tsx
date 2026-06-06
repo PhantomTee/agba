@@ -10,24 +10,21 @@ export function Providers({ children }: { children: ReactNode }) {
 
   const [wagmiConfig] = useState(() => {
     const config = publicConfig();
-    if (!config.arcRpc || !config.arcChainId) return undefined;
+    const chainId = config.arcChainId || 1337;
+    const rpcUrl = config.arcRpc || "http://127.0.0.1:8545";
     const chain = {
-      id: config.arcChainId,
-      name: "Arc Testnet",
+      id: chainId,
+      name: config.arcChainId ? "Arc Testnet" : "Local Wallet Fallback",
       nativeCurrency: { name: "Arc", symbol: "ARC", decimals: 18 },
-      rpcUrls: { default: { http: [config.arcRpc] } },
+      rpcUrls: { default: { http: [rpcUrl] } },
       blockExplorers: undefined,
     } as const;
     return createConfig({
       chains: [chain],
       connectors: [injected()],
-      transports: { [chain.id]: http(config.arcRpc) },
+      transports: { [chain.id]: http(rpcUrl) },
     });
   });
-
-  if (!wagmiConfig) {
-    return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
-  }
 
   return (
     <WagmiProvider config={wagmiConfig}>

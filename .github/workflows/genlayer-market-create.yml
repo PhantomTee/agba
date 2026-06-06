@@ -1,4 +1,4 @@
-name: Agba Yield Cron
+name: GenLayer Market Create
 
 on:
   schedule:
@@ -6,12 +6,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  yield:
-    name: USYC sweep
+  request-genlayer-market:
     runs-on: ubuntu-latest
     steps:
-      - name: Trigger USYC sweep
+      - name: Request GenLayer market creation
         run: |
-          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/yield" \
+          curl --fail-with-body --max-time 70 -X POST "${{ secrets.APP_URL }}/api/agent/request-genlayer-market" \
             -H "x-cron-secret: ${{ secrets.CRON_SECRET }}" \
             -H "Content-Type: application/json"

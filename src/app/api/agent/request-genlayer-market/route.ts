@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
-import { assertCronRequest } from "@/lib/auth";
 import { runAgentScan } from "@/lib/agentScan";
+import { assertXCronSecret } from "@/lib/genlayer/client";
 import { safeJson } from "@/lib/json";
 
 export const dynamic = "force-dynamic";
@@ -8,9 +8,9 @@ export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
-    assertCronRequest(request);
+    assertXCronSecret(request);
     return safeJson(await runAgentScan());
   } catch (error) {
-    return safeJson({ error: error instanceof Error ? error.message : "Agent scan failed" }, { status: 500 });
+    return safeJson({ error: error instanceof Error ? error.message : "Unable to request GenLayer market" }, { status: 500 });
   }
 }

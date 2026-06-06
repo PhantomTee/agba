@@ -36,6 +36,12 @@ node_modules_broken_*/
 # env files (can opt-in for committing if needed)
 .env*
 
+# local wallets / deployer secrets
+/wallets/
+/deployer/
+*.key
+*.keystore
+
 # vercel
 .vercel
 

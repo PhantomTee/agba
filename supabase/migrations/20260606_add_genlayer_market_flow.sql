@@ -1,0 +1,13 @@
+alter table markets add column if not exists created_by text default 'GENLAYER';
+alter table markets add column if not exists resolution_mode text default 'GENLAYER';
+alter table markets add column if not exists resolution_source_url text;
+alter table markets add column if not exists genlayer_creator_tx text;
+alter table markets add column if not exists genlayer_resolver_tx text;
+alter table markets add column if not exists genlayer_status text default 'NOT_REQUESTED';
+alter table markets add column if not exists genlayer_creation_reasoning text;
+alter table markets add column if not exists genlayer_resolution_reasoning text;
+alter table markets add column if not exists genlayer_resolution_evidence text;
+alter table markets add column if not exists genlayer_resolution_source_used text;
+alter table markets add column if not exists initial_probability_yes integer default 50;
+alter table markets add column if not exists duration_days integer;
+alter table markets add column if not exists resolves_at_reason text;
