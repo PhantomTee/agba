@@ -36,6 +36,10 @@ export function assertXCronSecret(request: NextRequest) {
   if (provided !== expected) throw new Error("Unauthorized cron request");
 }
 
+export function isUnauthorizedCronError(error: unknown) {
+  return error instanceof Error && error.message === "Unauthorized cron request";
+}
+
 export function isGroqFallbackEnabled() {
   return getOptionalEnv("USE_GROQ_FALLBACK") === "true";
 }

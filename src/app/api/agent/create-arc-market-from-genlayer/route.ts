@@ -1,6 +1,6 @@
 import { type NextRequest } from "next/server";
 import { getMarketContract } from "@/lib/chain";
-import { assertXCronSecret } from "@/lib/genlayer/client";
+import { assertXCronSecret, isUnauthorizedCronError } from "@/lib/genlayer/client";
 import { clampGenLayerDurationDays, validateGenLayerMarketProposal } from "@/lib/genlayer/marketCreator";
 import { safeJson } from "@/lib/json";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -11,7 +11,8 @@ export const maxDuration = 60;
 export async function POST(request: NextRequest) {
   try {
     assertXCronSecret(request);
-    const body = await request.json();
+    const body = await request.json().catch(() => null);
+    if (!body || typeof body !== "object") return safeJson({ error: "JSON body is required" }, { status: 400 });
     const proposal = validateGenLayerMarketProposal(body.proposal ?? body);
     if (!proposal.suitable) return safeJson({ error: "GenLayer proposal is not suitable" }, { status: 400 });
 
@@ -83,6 +84,7 @@ export async function POST(request: NextRequest) {
 
     return safeJson({ success: true, marketId, txHash: receipt?.hash || tx.hash });
   } catch (error) {
+    if (isUnauthorizedCronError(error)) return safeJson({ error: "Unauthorized cron request" }, { status: 401 });
     return safeJson({ error: error instanceof Error ? error.message : "Unable to create Arc market from GenLayer" }, { status: 500 });
   }
 }

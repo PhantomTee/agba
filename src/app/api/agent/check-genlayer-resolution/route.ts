@@ -1,5 +1,5 @@
 import { type NextRequest } from "next/server";
-import { assertXCronSecret } from "@/lib/genlayer/client";
+import { assertXCronSecret, isUnauthorizedCronError } from "@/lib/genlayer/client";
 import { checkGenLayerResolution } from "@/lib/genlayer/marketResolver";
 import { safeJson } from "@/lib/json";
 import { getSupabaseAdmin } from "@/lib/supabase";
@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
     if (error) throw error;
     return safeJson({ pending: data || [] });
   } catch (error) {
+    if (isUnauthorizedCronError(error)) return safeJson({ error: "Unauthorized cron request" }, { status: 401 });
     return safeJson({ error: error instanceof Error ? error.message : "Unable to check GenLayer resolution" }, { status: 500 });
   }
 }
